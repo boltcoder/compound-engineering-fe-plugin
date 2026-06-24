@@ -210,6 +210,22 @@ CODEX_HOME="$HOME/.codex/profiles/work" codex plugin add compound-engineering@co
 
 The marketplace step only makes the plugin available; the plugin install is what activates the native CE skills for that profile.
 
+### Kimi Code CLI
+
+Kimi Code CLI can install Compound Engineering directly from this repository because the repo ships a native `.kimi-plugin/plugin.json` manifest:
+
+```text
+/plugins install https://github.com/EveryInc/compound-engineering-plugin
+```
+
+You can also browse it through Kimi's custom marketplace flow:
+
+```text
+/plugins marketplace https://raw.githubusercontent.com/EveryInc/compound-engineering-plugin/main/.kimi-plugin/marketplace.json
+```
+
+After installing or updating, run `/reload` or start a new Kimi session so the plugin skills are loaded.
+
 ### GitHub Copilot
 
 For **VS Code Copilot Agent Plugins**:
@@ -371,6 +387,20 @@ codex plugin add compound-engineering@compound-engineering-plugin
 ```
 
 Use a separate `CODEX_HOME` when you want to keep local testing isolated from your normal Codex profile. The Codex marketplace entry points at the public Git plugin source so root-shaped plugin repos install correctly; use a temporary marketplace catalog with a `source.url` plus `ref` when testing unpublished plugin-content changes end to end.
+
+**Kimi Code CLI**
+
+Inside Kimi Code CLI:
+
+```text
+/plugins install /path/to/compound-engineering-plugin
+```
+
+To test the local marketplace catalog instead, pass the catalog path:
+
+```text
+/plugins marketplace /path/to/compound-engineering-plugin/.kimi-plugin/marketplace.json
+```
 
 **OpenCode**
 

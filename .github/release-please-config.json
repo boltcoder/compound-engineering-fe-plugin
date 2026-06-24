@@ -44,6 +44,7 @@
         ".cursor/",
         ".windsurf/",
         ".agents/plugins/marketplace.json",
+        ".kimi-plugin/marketplace.json",
         ".claude-plugin/marketplace.json",
         ".cursor-plugin/marketplace.json"
       ],
@@ -66,6 +67,11 @@
         {
           "type": "json",
           "path": ".codex-plugin/plugin.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": ".kimi-plugin/plugin.json",
           "jsonpath": "$.version"
         },
         {
