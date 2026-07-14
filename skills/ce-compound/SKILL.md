@@ -505,6 +505,8 @@ Knowledge track:
 - documentation-gaps/
 - best-practices/ — fallback only, use when no narrower knowledge-track value applies
 
+**For frontend problems** (React, TypeScript, CSS, accessibility, bundling, browser performance), read `references/frontend-patterns.md` for frontend-specific solution categories, an anti-patterns catalog, a solution template, pattern recognition signals, and documentation sources. Read it alongside `references/yaml-schema.md` when classifying a frontend learning.
+
 ## Common Mistakes to Avoid
 
 | ❌ Wrong | ✅ Correct |

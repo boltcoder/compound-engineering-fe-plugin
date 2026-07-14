@@ -94,6 +94,8 @@ Before deep code tracing, confirm the environment is what you think it is:
 
 #### 1.3 Trace the code path
 
+For frontend bugs (React components, browser behavior, CSS, state management), read `references/frontend-debugging-patterns.md` for React DevTools workflows, state management debugging, CSS/layout debugging, memory leak patterns, and frontend error triage tables.
+
 Trace data flow backward from the symptom to where valid state first became invalid. Read code-shape to form a hypothesis, then verify with observed values — do not theorize from code alone.
 
 Concrete recipe:

@@ -487,6 +487,8 @@ Each unit carries a stable plan-local **U-ID** assigned in Phase 3.5 (`U1`, `U2`
 
 #### 3.4 High-Level Technical Design
 
+**Frontend architecture grounding.** When planning frontend features (React components, state management, CSS architecture, performance budgets), read `references/frontend-architecture-guide.md` for component composition patterns, the state management decision ladder, CSS architecture, Web Vitals budget planning, and accessibility planning. Apply its heuristics when composing the High-Level Technical Design and each implementation unit's component boundaries.
+
 When the plan's technical approach has shape that prose alone doesn't carry well — architecture across components, sequencing across processes, state machines, branching gates, lifecycles, quantitative comparisons — include a High-Level Technical Design section that conveys the shape. The exact form (component diagram, sequence, swim lane, flowchart, state machine, decision matrix, pseudo-code grammar, bar chart for sizing concerns) is the agent's call per artifact — pick what makes the content land fastest for the reader.
 
 See `references/plan-sections.md` for the section catalog including HTD's "include when material" criterion. See the format-rendering reference loaded at Phase 0.0 for how visualizations render in the target format (mermaid in markdown, inline SVG in HTML — with the layout-legibility principles around halo, contrast, and label placement when in HTML).

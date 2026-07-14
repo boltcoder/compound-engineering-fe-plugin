@@ -28,6 +28,8 @@ Dispatch three generic subagents — code-reuse, code-quality, and efficiency re
 
 Do not paraphrase these rubrics from memory — read each file and pass it verbatim, or the reviewer loses the gating rules that keep the pass behavior-preserving.
 
+When the scope contains frontend code (React components, TypeScript types, CSS/Tailwind, hooks, or state management), also read `references/frontend-simplification-patterns.md` from this skill's directory. It carries concrete frontend simplification rules (memoization audit, context splitting, hook over-abstraction, TypeScript type simplification, CSS/Tailwind cleanup) plus the deep module vocabulary, structural complexity thresholds, and over-simplification traps. Fold the relevant sections into the matching reviewers' prompts at dispatch.
+
 **Bounded dispatch.** Queue the three reviewers and launch only as many as the harness accepts at once; treat a concurrency/active-agent-limit error as backpressure (leave the reviewer queued and retry after a slot frees), not as reviewer failure.
 
 **Model selection.** Use the platform's balanced mid-tier model for these reviewers when the current harness exposes a known override. In Claude Code this is the Sonnet class. In Codex, apply this tier only when the active dispatch primitive exposes an explicit model or custom-agent selector; task wording alone does not select a different model. Otherwise omit the override and inherit the parent model -- a working pass on the parent model beats a broken dispatch.
