@@ -7,7 +7,7 @@
   "properties": {
     "reviewer": {
       "type": "string",
-      "description": "Persona name that produced this output (e.g., 'coherence', 'feasibility', 'product-lens')"
+      "description": "Persona name that produced this output (e.g., 'coherence', 'feasibility', 'design-lens')"
     },
     "findings": {
       "type": "array",

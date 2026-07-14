@@ -1,6 +1,6 @@
 # Model Tiers
 
-Read this when dispatching a sub-agent (the Phase 1.1 grounding scout, the Phase 2.6 claim verifier, or the opt-in Slack researcher). Sub-agent dispatch is tiered by task shape, never hardcoded to a model name:
+Read this when dispatching a sub-agent (the Phase 1.1 grounding scout or the Phase 2.6 claim verifier). Sub-agent dispatch is tiered by task shape, never hardcoded to a model name:
 
 - **Extraction tier** — the grounding scout: retrieval and quoting work. Use the platform's cheapest capable model when the current harness exposes a known override. "Capable" is part of the spec — escalate to the generation tier when the repo is large or the stack obscure.
 - **Generation tier** — the claim verifier: evidence-driven mechanical verification. Use the platform's mid-tier model when the current harness exposes a known override. If model names are unknown, omit the override and inherit rather than guessing.

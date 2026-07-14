@@ -62,6 +62,8 @@ Map each changed file to the route(s) that render it, then build the list of URL
 | `src/app/*` (Next.js) | Corresponding routes |
 | `src/components/*` | Pages using those components |
 
+**React + TypeScript CSR apps:** read `references/frontend-testing-guide.md` from this skill's directory for the React file-to-route mapping (the table above is Rails-centric), plus accessibility testing, visual regression, Web Vitals measurement, React-specific testing patterns, network/API testing, and Testing Library query priorities.
+
 ### 4. Determine the Dev Server Port
 
 Determine the preferred port using this priority:

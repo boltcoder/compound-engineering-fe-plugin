@@ -1,29 +1,14 @@
 # Agent Instructions
 
-This repository is the root of the `compound-engineering` coding-agent plugin and the marketplace/catalog metadata used to distribute it.
+This repository is a frontend-focused fork of [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin), scoped to the workflow of a React + TypeScript client-side-rendered engineering team. It contains 24 skills under `skills/` plus supporting documentation under `docs/`. The converter, marketplace, and release infrastructure of the upstream plugin have been removed.
 
-It also contains:
-- the Bun/TypeScript CLI that converts Claude Code plugins into other agent platform formats
-- shared release and metadata infrastructure for the CLI, marketplace, and plugin
-
-`AGENTS.md` is the canonical repo instruction file. Root `CLAUDE.md` exists only as a compatibility shim for tools and conversions that still look for it.
-
-## Quick Start
-
-```bash
-bun install
-bun test                  # full test suite
-bun run release:validate  # check plugin/marketplace consistency
-```
+`AGENTS.md` is the canonical repo instruction file. Root `CLAUDE.md` exists only as a compatibility shim (`@AGENTS.md`) for tools that still look for it.
 
 ## Working Agreement
 
 - **Branching:** Create a feature branch for any non-trivial change. If already on the correct branch for the task, keep using it; do not create additional branches or worktrees unless explicitly requested.
-- **Merge policy:** All changes to `main` go through pull requests. Direct pushes and direct merges are not allowed; branch protection on `main` enforces this by requiring the `test` status check to pass. The direct path bypasses `release:validate`, the test suite, and PR title validation — past direct merges have caused version drift requiring multi-PR recovery (see `docs/solutions/workflow/release-please-version-drift-recovery.md`).
+- **Merge policy:** All changes to `main` go through pull requests.
 - **Safety:** Do not delete or overwrite user data. Avoid destructive commands.
-- **Testing:** Run `bun test` after changes that affect parsing, conversion, or output.
-- **Release versioning:** Releases are prepared by release automation, not normal feature PRs. The repo has one root plugin/package release component (`compound-engineering`) plus marketplace components (`marketplace`, `cursor-marketplace`). GitHub release PRs and GitHub Releases are the canonical release-notes surface for new releases; root `CHANGELOG.md` is only a pointer to that history. Use conventional titles such as `feat:` and `fix:` so release automation can classify change intent, but do not hand-bump release-owned versions or hand-author release notes in routine PRs.
-- **Output Paths:** Keep OpenCode output at `opencode.json` and `.opencode/{agents,skills,plugins}`. For OpenCode, commands go to `~/.config/opencode/commands/<name>.md`; `opencode.json` is deep-merged (never overwritten wholesale).
 - **Scratch Space:** Default to OS temp. Use `.context/` only when explicitly justified by the rules below.
   - **Default: OS temp** — covers most scratch, including per-run throwaway AND cross-invocation reusable, regardless of whether a repo is present or whether other skills may read the files. A stable OS-temp prefix handles cross-skill and cross-invocation coordination equally well as an in-repo path; repo-adjacency is rarely the relevant property.
     - **Per-run throwaway**: `mktemp -d -t <prefix>-XXXXXX` (OS handles cleanup). Use for files consumed once and discarded — captured screenshots, stitched GIFs, intermediate build outputs, recordings, delegation prompts/results, single-run checkpoints. The resulting path is opaque (on macOS it resolves under `$TMPDIR`/`/var/folders/...`) — that is appropriate for throwaway files users are not meant to access.
@@ -36,55 +21,22 @@ bun run release:validate  # check plugin/marketplace consistency
   - **Durable outputs** (plans, specs, learnings, docs, final deliverables) belong in `docs/` or another repo-tracked location, not in either scratch tier.
   - **Cross-platform note:** `/tmp` is writable on macOS (symlink to `/private/tmp`), Linux, and WSL. `mktemp -d -t <prefix>-XXXXXX` also works on all three. Skills authored here assume Unix-like shells; native Windows is not a current target.
 - **Character encoding:**
-  - **Identifiers** (file names, agent names, command names): ASCII only -- converters and regex patterns depend on it.
+  - **Identifiers** (file names, agent names, command names): ASCII only -- skill loaders and regex patterns depend on it.
   - **Markdown tables:** Use pipe-delimited (`| col | col |`), never box-drawing characters.
   - **Prose and skill content:** Unicode is fine (emoji, punctuation, etc.). Prefer ASCII arrows (`->`, `<-`) over Unicode arrows in code blocks and terminal examples.
 
 ## Directory Layout
 
 ```
-src/              CLI entry point, parsers, converters, target writers
-skills/           Compound Engineering plugin skills
-.claude-plugin/   Claude plugin manifest and marketplace catalog metadata
-.codex-plugin/    Codex plugin manifest
-.cursor-plugin/   Cursor plugin manifest and marketplace catalog metadata
-.opencode/        OpenCode package entrypoint and install docs
-.pi/              Pi extension entrypoint
-tests/            Converter, writer, and CLI tests + fixtures
-docs/             Requirements, plans, solutions, and target specs
+skills/           Compound Engineering skills (self-contained units)
+docs/             Plans, solutions, and skill documentation
 CONCEPTS.md       Shared domain vocabulary (glossary of project-specific terms)
 ```
 
-## Repo Surfaces
+## Skill Maintenance
 
-Changes in this repo may affect one or more of these surfaces:
-
-- root plugin content under `skills/`, `AGENTS.md`, `README.md`, and platform manifests
-- marketplace catalogs under `.claude-plugin/`, `.cursor-plugin/`, and `.agents/plugins/`
-- the converter/install CLI in `src/` and `package.json`
-
-Do not assume a repo change is "just CLI" or "just plugin" without checking which surface owns the affected files.
-
-## Plugin Maintenance
-
-When changing plugin content:
-
-- Update substantive docs like `README.md` when the plugin behavior, inventory, or usage changes.
-- When adding a user-facing skill, document it: create a `docs/skills/<skill-name>.md` page (purpose, novel mechanics, when to use, chain position — follow the shape of the existing pages) and add a catalog row under the right category in `docs/skills/README.md`, alongside the root `README.md` inventory row and the skill-count bump in `tests/release-metadata.test.ts`. Keep these in sync when a skill's purpose or inventory changes. This is convention, not yet validated by a test, so it is easy to miss — most skills have a page; the few that don't (e.g. `lfg`, `ce-dogfood-beta`) are the exception, not the rule.
-- Do not hand-bump release-owned versions in plugin or marketplace manifests.
-- Do not hand-add release entries to `CHANGELOG.md` or treat it as the canonical source for new releases.
-- Run `bun run release:validate` if agents, commands, skills, MCP servers, or release-owned descriptions/counts may have changed.
-- When removing a skill, agent, or command, add its name to both cleanup registries so stale flat-install artifacts are swept on upgrade:
-  - `STALE_SKILL_DIRS` / `STALE_AGENT_NAMES` / `STALE_PROMPT_FILES` in `src/utils/legacy-cleanup.ts`
-  - `EXTRA_LEGACY_ARTIFACTS_BY_PLUGIN["compound-engineering"]` in `src/data/plugin-legacy-artifacts.ts`
-
-Useful validation commands:
-
-```bash
-bun run release:validate
-cat .claude-plugin/marketplace.json | jq .
-cat .claude-plugin/plugin.json | jq .
-```
+- Update substantive docs like `README.md` when the skill inventory or usage changes.
+- When adding a user-facing skill, document it: create a `docs/skills/<skill-name>.md` page (purpose, novel mechanics, when to use, chain position — follow the shape of the existing pages) and add a catalog row under the right category in `docs/skills/README.md`, alongside the root `README.md` inventory row. Keep these in sync when a skill's purpose or inventory changes. This is convention, not validated by a test, so it is easy to miss — most skills have a page; the few that don't (e.g. `lfg`) are the exception, not the rule.
 
 ## Runtime vs Authoring Context
 
@@ -142,57 +94,17 @@ When a skill needs to discover a project convention at runtime — the issue tra
 
 ## Validating Agent and Skill Changes
 
-Behavioral changes to a plugin skill or skill-local persona (anything under `skills/`) need a different validation path than mechanical code changes, because of how Claude Code loads plugins.
+Behavioral changes to a skill or skill-local persona (anything under `skills/`) need a different validation path than mechanical code changes, because of how Claude Code loads plugins.
 
 - **Use the `skill-creator` skill to test changes.** Skill-creator is purpose-built for this: it spawns a generic subagent and injects the agent or skill content into the subagent's prompt at dispatch time, so each run reads the current source from disk. Invoke `/skill-creator` and use its eval workflow rather than reaching for ad-hoc workarounds.
 
 - **Plugin agent and skill definitions both cache at session start.** Once a Claude Code session is open, dispatching a typed plugin agent runs the in-memory copy that was loaded when the session began. The same applies to skills: invoking a skill goes through the cached skill loader, so edits to skill scripts are also not tested via that path. File edits to either layer after session start do not propagate within the same session. Any iteration loop built around typed-agent dispatch or Skill-tool invocation in the same session is testing pre-edit content, not your changes.
 
-- **Do NOT edit `~/.claude/plugins/cache/` or `~/.claude/plugins/marketplaces/` to try to force a reload.** Those paths are user machine state, not repo-managed. Modifying them does not reliably bypass the in-session cache (it didn't, in observed behavior), risks being silently overwritten by plugin updates, and is the wrong layer to test from. The skill-creator pattern is the proper approach; if you genuinely need fresh-loaded behavior of the typed-agent dispatch path, restart the Claude Code session — but skill-creator is preferred for fast iteration.
+- **Do NOT edit `~/.claude/plugins/cache/` or `~/.claude/plugins/marketplaces/` to try to force a reload.** Those paths are user machine state, not repo-managed. Modifying them does not reliably bypass the in-session cache, risks being silently overwritten by plugin updates, and is the wrong layer to test from. The skill-creator pattern is the proper approach; if you genuinely need fresh-loaded behavior of the typed-agent dispatch path, restart the Claude Code session — but skill-creator is preferred for fast iteration.
 
-- **A version-matched cache is not automatically stale — confirm by content, not by version.** When this working tree is the local marketplace source, a session (re)start re-copies it into `~/.claude/plugins/cache/.../compound-engineering/<version>/` (a plain copy, no `.git`; `<version>` is the working tree's `.claude-plugin/plugin.json` version), so the loaded plugin can be identical to — and as current as — your edits. Do not assume the running copy is stale just because it lives under the cache path; equally, do not assume a matching `<version>` means it includes your latest change. Version match is necessary but not sufficient: edits within a release do not bump the version, so a matching segment proves only that the cache was built from this release, not that it captured your most recent edit. To know which copy is actually loaded, diff the specific cache file against the working-tree file — identical means the running plugin is your current edit and you can trust it; differing means the session predates the edit, so restart (or use skill-creator). Never infer "stale" or "current" from the version segment alone.
+- **A version-matched cache is not automatically stale — confirm by content, not by version.** Edits within a release do not bump the version, so a matching version proves only that the cache was built from this release, not that it captured your most recent edit. To know which copy is actually loaded, diff the specific cache file against the working-tree file — identical means the running plugin is your current edit and you can trust it; differing means the session predates the edit, so restart (or use skill-creator). Never infer "stale" or "current" from the version segment alone.
 
-- **Mechanical changes do not have this restriction.** Skill scripts (e.g., `extract-metadata.py`), parser logic, conversion code, and anything `bun test` exercises always run the current source. The caching issue only affects LLM-driven skill prose behavior dispatched through the plugin loader.
-
-## Coding Conventions
-
-- Prefer explicit mappings over implicit magic when converting between platforms.
-- Keep target-specific behavior in dedicated converters/writers instead of scattering conditionals across unrelated files.
-- Preserve stable output paths and merge semantics for installed targets; do not casually change generated file locations.
-- When adding or changing a target, update fixtures/tests alongside implementation rather than treating docs or examples as sufficient proof.
-
-## Commit Conventions
-
-- **Prefix is based on intent, not file type.** Use conventional prefixes (`feat:`, `fix:`, `docs:`, `refactor:`, etc.) but classify by what the change does, not the file extension. Files under `skills/` and plugin manifests are product code even though they are Markdown or JSON. Reserve `docs:` for files whose sole purpose is documentation (`README.md`, `docs/`, `CHANGELOG.md`).
-- **Type selection — classify by intent, not diff shape.** Where `fix:` and `feat:` could both seem to fit, default to `fix:`: a change that remedies broken or missing behavior is `fix:` even when implemented by adding code, and net additions do not turn a fix into a `feat:`. Reserve `feat:` for capabilities the user could not previously accomplish where nothing was broken. Other conventional types (`chore:`, `refactor:`, `docs:`, `perf:`, `test:`, `ci:`, `build:`, `style:`) remain primary when they describe the change more precisely than either. Heuristic: if a regression test you could write today would have failed *before* the change, it's `fix:`. The user may override this default for a specific change.
-- **Include a component scope.** The scope appears verbatim in the changelog. Pick the narrowest useful label: skill/agent name (`document-review`, `learnings-researcher`), CLI or marketplace area (`cli`, `marketplace`), or shared area when cross-cutting (`review`, `research`, `converters`). Never use `compound-engineering` — it's the entire plugin and tells the reader nothing. Omit scope only when no single label adds clarity.
-- **Never use `!` or a `BREAKING CHANGE:` footer without explicit user confirmation.** These markers trigger release-please's automatic major version bump — a decision the user may not want even when a change is technically breaking. If a change appears breaking, surface that to the user and let them decide whether to apply the marker.
-
-## Adding a New Target Provider
-
-Only add a provider when the target format is stable, documented, and has a clear mapping for tools/permissions/hooks. Use this checklist:
-
-1. **Define the target entry**
-   - Add a new handler in `src/targets/index.ts` with `implemented: false` until complete.
-   - Use a dedicated writer module (e.g., `src/targets/codex.ts`).
-
-2. **Define types and mapping**
-   - Add provider-specific types under `src/types/`.
-   - Implement conversion logic in `src/converters/` (from Claude → provider).
-   - Keep mappings explicit: tools, permissions, hooks/events, model naming.
-
-3. **Wire the CLI**
-   - Ensure `convert` and `install` support `--to <provider>` and `--also`.
-   - Keep behavior consistent with OpenCode (write to a clean provider root).
-
-4. **Tests (required)**
-   - Extend fixtures in `tests/fixtures/sample-plugin`.
-   - Add spec coverage for mappings in `tests/converter.test.ts`.
-   - Add a writer test for the new provider output tree.
-   - Add a CLI test for the provider (similar to `tests/cli.test.ts`).
-
-5. **Docs**
-   - Update README with the new `--to` option and output locations.
+- **Mechanical changes do not have this restriction.** Skill scripts (e.g., `extract-metadata.py`) and anything run directly always execute the current source. The caching issue only affects LLM-driven skill prose behavior dispatched through the plugin loader.
 
 ## Specialist Prompt Assets in Skills
 
@@ -220,7 +132,6 @@ Why this matters:
 
 - **Runtime resolution:** Skills execute from the user's working directory, not the skill directory. Cross-directory paths and absolute paths will not resolve as expected.
 - **Unpredictable install paths:** Plugins installed from the marketplace are cached at versioned paths. Absolute paths that worked in the source repo will not match the installed layout, and the version segment changes on every release.
-- **Converter portability:** The CLI copies each skill directory as an isolated unit when converting to other agent platforms. Cross-directory references break because sibling directories are not included in the copy.
 
 If two skills need the same supporting file, duplicate it into each skill's directory. Prefer small, self-contained reference files over shared dependencies.
 
@@ -240,8 +151,8 @@ Rules:
 
 - A consumer resolves the agnostic profile through the cache (`get` → HIT load / MISS derive-and-`put` / NO-CACHE derive-fresh), then runs **only its question-specific grounding fresh**. The cache is an optimization, never a correctness dependency, and must never let a stale profile change an output.
 - **Always re-globbed fresh, never cached:** the `docs/solutions/` enumeration and subdirectory-scoped instruction files. Caching them would risk serving a stale match (e.g. a just-written learning), and re-globbing is ~free.
-- **Adding a consumer:** drop byte-identical copies of the three assets into the skill, add its name to `CONSUMER_SKILLS` in `tests/repo-profile-cache-parity.test.ts`, and wire its grounding phase. The parity test guards *file* drift; the per-consumer `skill-creator` eval (agnostic-from-cache, question-specific-fresh) guards *integration* drift.
-- Any change to the schema or protocol must be edited in **all** copies (the parity test fails otherwise) and bump `PROFILE_SCHEMA_VERSION` in the helper so older cache entries invalidate. Renaming or moving a profile **field** additionally requires updating every consumer `SKILL.md` that reads a named field path (grep the consumers for it, e.g. `conventions.testing`, `vocabulary`) — those per-skill field reads are not byte-duplicated, so the parity test does not guard them.
+- **Adding a consumer:** drop byte-identical copies of the three assets into the skill and wire its grounding phase. Keep the copies in sync manually — the parity test that guarded file drift was removed with the test suite, so drift is now caught only by review.
+- Any change to the schema or protocol must be edited in **all** copies and bump `PROFILE_SCHEMA_VERSION` in the helper so older cache entries invalidate. Renaming or moving a profile **field** additionally requires updating every consumer `SKILL.md` that reads a named field path (grep the consumers for it, e.g. `conventions.testing`, `vocabulary`) — those per-skill field reads are not byte-duplicated.
 
 ## Platform-Specific Variables in Skills
 
@@ -265,7 +176,7 @@ bash "$SKILL_DIR/scripts/my-script.sh" ARG
 
 An existence guard (`if [ -f "$SKILL_DIR/scripts/my-script.sh" ]; then … else echo "not found — re-check the SKILL.md path"; fi`) is optional — useful when there's a real fallback, but see the permission caveat below before guarding a pinned call.
 
-`SKILL_DIR` is a **model-filled** value, not a harness variable: every harness loads SKILL.md from a real absolute path the agent knows, so the skill instructs the agent to set `SKILL_DIR` to that directory. This works identically on Claude Code, Codex, and Cursor precisely because it depends on no host-specific variable — `SKILL_DIR`, `CLAUDE_SKILL_DIR`, `CODEX_SKILL_DIR`, `AGENT_SKILL_DIR` are **not** env vars on any of them, yet the script runs because the agent supplies the path. This is the production pattern used by widely-installed cross-host skills (e.g. `last30days`). Two constraints: (1) shell state does **not** persist between separate Bash-tool calls, so `SKILL_DIR` cannot be set once and reused — each invocation must carry the absolute path (set it inline in the same command). (2) A script that needs its *own* directory (to read a sibling file) derives it from `BASH_SOURCE`, not `SKILL_DIR`, since `SKILL_DIR` is the orchestrator's shell var and is not exported to the child process — see `skills/ce-code-review/scripts/cross-model-adversarial-review.sh` for the reference implementation. `last30days` adopted this anchor for its critical multi-host engine after a path-resolution regression; it is the right tool when a script must run *reliably*, which is why it is the tier-3 default — but tiers 1 and 2 deliberately stay lighter.
+`SKILL_DIR` is a **model-filled** value, not a harness variable: every harness loads SKILL.md from a real absolute path the agent knows, so the skill instructs the agent to set `SKILL_DIR` to that directory. This works identically on Claude Code, Codex, and Cursor precisely because it depends on no host-specific variable — `SKILL_DIR`, `CLAUDE_SKILL_DIR`, `CODEX_SKILL_DIR`, `AGENT_SKILL_DIR` are **not** env vars on any of them, yet the script runs because the agent supplies the path. This is the production pattern used by widely-installed cross-host skills (e.g. `last30days`). Two constraints: (1) shell state does **not** persist between separate Bash-tool calls, so `SKILL_DIR` cannot be set once and reused — each invocation must carry the absolute path (set it inline in the same command). (2) A script that needs its *own* directory (to read a sibling file) derives it from `BASH_SOURCE`, not `SKILL_DIR`, since `SKILL_DIR` is the orchestrator's shell var and is not exported to the child process. `last30days` adopted this anchor for its critical multi-host engine after a path-resolution regression; it is the right tool when a script must run *reliably*, which is why it is the tier-3 default — but tiers 1 and 2 deliberately stay lighter.
 
 **Avoid `${CLAUDE_SKILL_DIR}` here — in this cross-agent plugin it is a footgun, not a neutral alternative.** Every skill in this repo is authored once and installed across Claude Code, Codex, Cursor, and Gemini, and `${CLAUDE_SKILL_DIR}` is a Claude-Code-only SKILL.md *content* substitution (not an env var) that is **empty on every other host**. So a `${CLAUDE_SKILL_DIR}`-guarded call's `then` branch quietly never fires off-Claude — the **genuine silent skip** — and a Claude-only mechanism breaks on Codex/Cursor because the converter doesn't rewrite these paths and the native Codex install loads raw `SKILL.md` (no `ce_platforms` filtering). The model-filled `SKILL_DIR` anchor works on every host, so it is the right replacement wherever a `${CLAUDE_SKILL_DIR}`-guarded executed-shell call exists today (tier 3). Do not reach for `${CLAUDE_SKILL_DIR}` as a "portable" option — it isn't. Reach for it only for behavior that is genuinely Claude-Code-only and will *never* run on another harness — which, given this plugin's cross-host install model, is essentially never; treat any new use as a smell to justify or remove. (Existing guarded uses such as `ce-compound`'s `validate-frontmatter.py` survive off-Claude only via an inline `else` fallback and should migrate to the anchor.)
 
@@ -273,25 +184,27 @@ So: a skill's *core* behavior **can** live in a bundled script across hosts — 
 
 **Permission caveat (Claude Code).** Claude Code's permission checker evaluates every subcommand of a compound command, and a bare `[ -f … ]` test is not pre-approved — so wrapping a pinned `bash "…sh"` call in an `if … then … fi` guard defeats a narrow `Bash(bash *…sh)` allow-rule and prompts on every run. If a bundled-script call must stay auto-approved via such a pin, keep it a single pinned command rather than guarding it inline. Note the model-filled `SKILL_DIR` anchor produces a *dynamic* absolute path that won't match a static `Bash(bash /…/scripts/x.sh)` pin regardless of guarding — so for the anchor, expect a one-time approval prompt per distinct command (or use a broader allow-rule); the static-pin trick mainly applies to the fixed `${CLAUDE_SKILL_DIR}` form.
 
-**Do not use `!` load-time pre-resolution in skills.** The `!`cmd`` SKILL.md syntax runs `cmd` at skill load and inlines its stdout, but it is banned here (enforced by `tests/skill-shell-safety.test.ts`) for two unfixable reasons: it runs **only on Claude Code** — on Codex, Cursor, Gemini, and Grok the line is inert literal text — and on Claude Code a command that exits **non-zero aborts skill load** with a user-facing error. Every real use was git context (`git rev-parse …`, `gh pr view …`) whose non-zero exit is a *normal* state (no PR yet, no `origin/HEAD`, detached HEAD, not a repo), so the ordinary case broke the skill. The POSIX guards that force exit 0 (`2>/dev/null || echo SENTINEL`) then fail to parse under Windows PowerShell 5.1, which broke skill load there instead (issue #1066). No single command string both exits 0 on the expected-failure states and parses under both POSIX sh and PowerShell, so the construct cannot be made safe.
+**Do not use `!` load-time pre-resolution in skills.** The `!`cmd`` SKILL.md syntax runs `cmd` at skill load and inlines its stdout, but it is banned here for two unfixable reasons: it runs **only on Claude Code** — on Codex, Cursor, Gemini, and Grok the line is inert literal text — and on Claude Code a command that exits **non-zero aborts skill load** with a user-facing error. Every real use was git context (`git rev-parse …`, `gh pr view …`) whose non-zero exit is a *normal* state (no PR yet, no `origin/HEAD`, detached HEAD, not a repo), so the ordinary case broke the skill. The POSIX guards that force exit 0 (`2>/dev/null || echo SENTINEL`) then fail to parse under Windows PowerShell 5.1, which broke skill load there instead (issue #1066). No single command string both exits 0 on the expected-failure states and parses under both POSIX sh and PowerShell, so the construct cannot be made safe.
 
 **Gather context at runtime instead.** Have the agent run one argv-style command per shell tool call (`git …`, `gh …`) — no `;`, `&&`, `||`, pipes, `$(…)`, or redirects — and interpret each exit status as control flow. This parses identically under POSIX sh and PowerShell because it is a single external-program invocation, and a non-zero exit becomes data the agent reads rather than a load-time abort. See `ce-commit` / `ce-commit-push-pr` for the pattern.
 
 **When a platform variable is unavoidable:** resolve it at runtime with a single shell tool call and include explicit fallback instructions, so the agent knows what to do if the value is empty, a literal command string, or an error — e.g. run `jq -r .version "${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json"`; if it resolved to a semantic version use it, otherwise fall back to the versionless behavior. This applies equally to any platform's variables — a skill converted from Codex, Gemini, or any other platform will have the same problem if it assumes platform-only variables exist without a fallback.
 
+## Commit Conventions
+
+- **Prefix is based on intent, not file type.** Use conventional prefixes (`feat:`, `fix:`, `docs:`, `refactor:`, etc.) but classify by what the change does, not the file extension. Files under `skills/` are product code even though they are Markdown. Reserve `docs:` for files whose sole purpose is documentation (`README.md`, `docs/`).
+- **Type selection — classify by intent, not diff shape.** Where `fix:` and `feat:` could both seem to fit, default to `fix:`: a change that remedies broken or missing behavior is `fix:` even when implemented by adding code, and net additions do not turn a fix into a `feat:`. Reserve `feat:` for capabilities the user could not previously accomplish where nothing was broken. Other conventional types (`chore:`, `refactor:`, `docs:`, `perf:`, `test:`, `ci:`, `build:`, `style:`) remain primary when they describe the change more precisely than either. Heuristic: if a regression test you could write today would have failed *before* the change, it's `fix:`. The user may override this default for a specific change.
+- **Include a component scope.** The scope appears verbatim in the changelog. Pick the narrowest useful label: skill/agent name (`document-review`, `learnings-researcher`), or shared area when cross-cutting (`review`, `research`). Never use `compound-engineering` — it's the entire plugin and tells the reader nothing. Omit scope only when no single label adds clarity.
+- **Never use `!` or a `BREAKING CHANGE:` footer without explicit user confirmation.** These markers signal a major version bump — a decision the user may not want even when a change is technically breaking. If a change appears breaking, surface that to the user and let them decide whether to apply the marker.
+
 ## Repository Docs Convention
 
 - **Plans** live in `docs/plans/` — unified plan artifacts. New `ce-brainstorm` outputs are requirements-only unified plans (`artifact_readiness: requirements-only`); `ce-plan` enriches them to implementation-ready plans (`artifact_readiness: implementation-ready`). Historical `docs/brainstorms/*-requirements.*` files remain readable legacy inputs and should not be migrated just because a new plan is created.
-- **Brainstorm evidence / legacy requirements** may live in `docs/brainstorms/` — historical requirements docs and specialized analysis artifacts such as `docs/brainstorms/riffrec-feedback/`. Do not treat this as the canonical output path for new `ce-brainstorm` artifacts.
+- **Brainstorm evidence / legacy requirements** may live in `docs/brainstorms/` — historical requirements docs and specialized analysis artifacts. Do not treat this as the canonical output path for new `ce-brainstorm` artifacts.
 - **Solutions** live in `docs/solutions/` — documented solutions to past problems (bugs, best practices, workflow patterns), organized by category with YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when implementing or debugging in documented areas.
-- **Specs** live in `docs/specs/` — target platform format specifications.
 
 ### Solution categories (`docs/solutions/`)
 
-This repo builds a plugin *for* developers. Categorize solutions from the perspective of the end user (a developer using the plugin), not a contributor to this repo.
-
-- **`developer-experience/`** — Issues with contributing to *this repo*: local dev setup, shell aliases, test ergonomics, CI friction. If the fix only matters to someone with a checkout of this repo, it belongs here.
-- **`integrations/`** — Issues where plugin output doesn't work correctly on a target platform or OS. Cross-platform bugs, target writer output problems, and converter compatibility issues go here.
+- **`developer-experience/`** — Issues with contributing to *this repo*: local dev setup, shell aliases, ergonomics. If the fix only matters to someone with a checkout of this repo, it belongs here.
+- **`integrations/`** — Issues where skill output doesn't work correctly on a target platform or OS. Cross-platform bugs and harness compatibility issues go here.
 - **`workflow/`**, **`skill-design/`** — Plugin skill and agent design patterns, workflow improvements.
-
-When in doubt: if the bug affects someone running `bun install compound-engineering` or `bun convert`, it's an integration or product issue, not developer-experience.

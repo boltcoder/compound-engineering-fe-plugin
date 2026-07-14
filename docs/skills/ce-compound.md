@@ -37,7 +37,7 @@ Most teams solve the same problem twice — sometimes with the same person — b
 - Bug track and knowledge track produce different section structures matched to the doc type
 - An overlap check decides whether to update an existing doc rather than create a duplicate
 - A discoverability check ensures the project's `AGENTS.md`/`CLAUDE.md` surfaces `docs/solutions/` so future agents find it (interactive Full asks consent before editing; headless and lightweight report or tip only)
-- Specialized post-review optionally enhances the doc: performance, security, data-integrity, and read-only simplification checks review the drafted learning without mutating product code
+- A read-only simplification check optionally reviews the drafted learning without mutating product code
 
 ---
 
@@ -45,7 +45,7 @@ Most teams solve the same problem twice — sometimes with the same person — b
 
 ### 1. Two modes — Full vs Lightweight, agent-selected
 
-**Full mode** runs three research subagents in parallel (Context Analyzer / Solution Extractor / Related Docs Finder), plus an automatic session-history probe that searches your prior sessions across Claude Code, Codex, and Cursor for related context. Cross-references existing docs, detects duplicates, runs specialized reviews.
+**Full mode** runs three research subagents in parallel (Context Analyzer / Solution Extractor / Related Docs Finder). Cross-references existing docs, detects duplicates, runs a read-only simplification review.
 
 **Lightweight mode** does the same documentation in a single pass, no subagents, no cross-referencing. Faster, fewer tokens.
 
@@ -84,15 +84,11 @@ Phase 2.45 closes this in two layers. A deterministic script (`scripts/validate-
 
 After capturing the new learning, `ce-compound` checks whether it should invoke `/ce-compound-refresh` on a narrow scope hint. It does NOT default to running refresh — only when the new learning suggests a specific older doc may now be stale (contradicted, superseded, or in a domain that just got refactored).
 
-### 7. Specialized post-review
+### 7. Read-only simplification review
 
-Based on the problem type, optional skill-local prompt assets review the documentation: `performance-oracle` for performance issues, `security-sentinel` for security, and `data-integrity-guardian` for database-oriented issues. Code-heavy docs may also get a read-only simplification review of the drafted examples and explanatory claims; this does not invoke `ce-simplify-code` and does not mutate product code.
+Based on the problem type, code-heavy docs may get a read-only simplification review of the drafted examples and explanatory claims; this does not invoke `ce-simplify-code` and does not mutate product code.
 
-### 8. Session history integration (automatic probe, not a question)
-
-Searching prior sessions pays off when an *unrelated* earlier session holds related problem-solving — something neither the agent nor the user can know a priori, which is why it was a poor fit for a yes/no prompt. Full mode instead resolves it with a cheap two-stage probe: a discovery+metadata pass always runs (in parallel with the research subagents, so it's near-free on wall-clock), and it escalates to the expensive extraction+synthesis only when a candidate session clears a relevance bar — a current-branch match or ≥2 topic-keyword hits. On a hit, findings fold into "What Didn't Work" (bug track) or "Context" (knowledge track); on a miss, the run records "no relevant prior sessions" and moves on. The gate is what keeps an always-on probe cheap — cheap enough that headless runs it too, since it prompts for nothing and so preserves headless's non-interactive contract. Only lightweight mode skips it entirely.
-
-### 9. Auto-invoke triggers
+### 8. Auto-invoke triggers
 
 Phrases like "that worked", "it's fixed", "working now", "problem solved" auto-invoke the skill so capture happens at the moment context is freshest. The user can override with `/ce-compound [context]` to capture immediately.
 
@@ -104,11 +100,11 @@ You've just spent 45 minutes debugging an N+1 query in the brief-generation flow
 
 `ce-compound` auto-invokes (or you call it explicitly). With plenty of context left, it silently picks Full mode and notes "Ran Full mode." at the top of its output — no prompt.
 
-Three subagents dispatch in parallel: Context Analyzer reads conversation history, classifies as `performance_issue` (bug track), proposes the filename and category. Solution Extractor structures the fix with before/after code. Related Docs Finder greps `docs/solutions/` for related issues, reports moderate overlap with an older doc on a different N+1 case. Alongside them, the session-history probe scans your recent sessions; none clear the relevance bar, so it records "no relevant prior sessions" without paying for synthesis.
+Three subagents dispatch in parallel: Context Analyzer reads conversation history, classifies as `performance_issue` (bug track), proposes the filename and category. Solution Extractor structures the fix with before/after code. Related Docs Finder greps `docs/solutions/` for related issues, reports moderate overlap with an older doc on a different N+1 case.
 
 The orchestrator assembles the doc, validates frontmatter via the YAML safety script, and writes `docs/solutions/performance-issues/n-plus-one-brief-generation.md`. Grounding validation then runs: the mechanical script confirms every cited path and SHA resolves, and the validator subagent quotes the defining source line behind the doc's claim about the ORM's default batching behavior. The discoverability check finds `AGENTS.md` doesn't mention `docs/solutions/`, proposes a one-line addition to the existing directory listing, and applies it after you confirm.
 
-Phase 3 dispatches the local `performance-oracle` prompt and, because the doc includes code examples, performs a read-only simplification check on the drafted examples and approach. Phase 2.5 surfaces a refresh recommendation: the older N+1 doc may benefit from consolidation review. The skill suggests `/ce-compound-refresh n-plus-one` as a narrow scope hint and ends.
+Phase 3 performs a read-only simplification check on the drafted examples and approach, because the doc includes code examples. Phase 2.5 surfaces a refresh recommendation: the older N+1 doc may benefit from consolidation review. The skill suggests `/ce-compound-refresh n-plus-one` as a narrow scope hint and ends.
 
 ---
 
@@ -212,7 +208,7 @@ Auto-invoke triggers: phrases like "that worked", "it's fixed", "working now", "
 ## FAQ
 
 **Why two modes, and why doesn't it ask me which one?**
-Full mode is for most cases — the parallel subagents catch duplicates, find related docs, and run specialized reviews. Lightweight mode exists for simple fixes or sessions running tight on context, where the deep cross-referencing isn't worth the token cost. The skill picks between them itself rather than prompting, because the deciding factor (how much context budget is left) is something the agent can see and you can't — asking would just make you guess. It reports the choice in its output, and re-running is a cheap correction if it guessed wrong.
+Full mode is for most cases — the parallel subagents catch duplicates, find related docs, and run a read-only simplification review. Lightweight mode exists for simple fixes or sessions running tight on context, where the deep cross-referencing isn't worth the token cost. The skill picks between them itself rather than prompting, because the deciding factor (how much context budget is left) is something the agent can see and you can't — asking would just make you guess. It reports the choice in its output, and re-running is a cheap correction if it guessed wrong.
 
 **What's the difference between bug track and knowledge track?**
 Bug track captures incident-level fixes — "X broke, here's why and how we fixed it." Knowledge track captures durable guidance — "this is how we do X here, and why." The two have different audiences and structures: bug track has Symptoms / What Didn't Work / Solution; knowledge track has Context / Guidance / When to Apply.

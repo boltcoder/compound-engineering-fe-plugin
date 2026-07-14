@@ -30,13 +30,11 @@ Gate findings by their `confidence` anchor value. Anchors are discrete integers 
 - **FYI-subsection** (anchor `50`): surface in the presentation layer's FYI subsection regardless of `autofix_class`. These do not enter the walk-through or any bulk action — observational value without forcing a decision. Advisory observations ("nothing breaks, but...") naturally land here.
 - **Actionable** (anchors `75` and `100`): enter the classification pipeline. Route by `autofix_class` (see 3.7).
 
-**Why this threshold, not Anthropic's ≥ 80 code-review threshold:** Document review has opposite economics from code review. There is no linter backstop — the review IS the backstop. Premise-level concerns (product-lens, adversarial) naturally cap at anchors 50-75 because "is the motivation valid?" cannot be verified against ground truth. The routing menu already makes dismissal cheap (Skip, Append to Open Questions), so surfaced-and-skipped is a low-cost outcome while missed-and-shipped derails downstream implementation. Filter low (`≥ 50`) and let the routing menu handle volume.
+**Why this threshold, not Anthropic's ≥ 80 code-review threshold:** Document review has opposite economics from code review. There is no linter backstop — the review IS the backstop. Premise-level concerns (adversarial) naturally cap at anchors 50-75 because "is the motivation valid?" cannot be verified against ground truth. The routing menu already makes dismissal cheap (Skip, Append to Open Questions), so surfaced-and-skipped is a low-cost outcome while missed-and-shipped derails downstream implementation. Filter low (`≥ 50`) and let the routing menu handle volume.
 
 ### 3.3 Deduplicate
 
 Fingerprint each finding using `normalize(section) + normalize(title)`. Normalization: lowercase, strip punctuation, collapse whitespace.
-
-**Cross-model twin exception.** When matching a `<reviewer-name>-<provider>` return against its in-process twin (`<reviewer-name>` only — not against unrelated personas), also treat findings as the same fingerprint when `normalize(section)` matches AND evidence-substring overlap exceeds 50% (same predicate shape as R29/R30), even if titles differ. Independent models routinely paraphrase the same issue under different titles; requiring title equality silently disables the cross-model agreement signal. This exception does **not** apply to other cross-persona pairs — those still require section+title.
 
 When fingerprints match across personas:
 
@@ -46,7 +44,7 @@ When fingerprints match across personas:
 
 ### 3.3b Same-Persona Premise Redundancy Collapse
 
-A single persona sometimes files multiple findings that share the same root premise expressed at different sections or wrapped in different framing (e.g., product-lens firing five variants of "motivation is weak" attached to Motivation, Unit 4b, Key Technical Decisions, and two other sections). Cross-persona dedup (3.3) does not catch this — it fingerprints on section+title, which differ even when the underlying concern is the same. Surfacing all N variants over-weights one persona's perspective relative to the other five and inflates the P2 Decisions tier with near-duplicate signal.
+A single persona sometimes files multiple findings that share the same root premise expressed at different sections or wrapped in different framing (e.g., adversarial firing five variants of "premise is unsupported" attached to Motivation, Unit 4b, Key Technical Decisions, and two other sections). Cross-persona dedup (3.3) does not catch this — it fingerprints on section+title, which differ even when the underlying concern is the same. Surfacing all N variants over-weights one persona's perspective relative to the other four and inflates the P2 Decisions tier with near-duplicate signal.
 
 For each persona, cluster that persona's surviving findings by shared root premise. A cluster forms when 3 or more findings from the same persona share:
 
@@ -58,7 +56,7 @@ For each cluster of size N ≥ 3:
 
 - Keep the single finding with the strongest evidence (highest confidence anchor, or if tied, the one citing the most concrete document reference)
 - Demote the remaining N-1 findings to FYI-subsection status (anchor `50`), regardless of their original anchor
-- On the kept finding, note in the Reviewer column that the persona raised N-1 related variants (e.g., `product-lens (+4 related variants demoted to FYI)`)
+- On the kept finding, note in the Reviewer column that the persona raised N-1 related variants (e.g., `adversarial (+4 related variants demoted to FYI)`)
 
 This runs per-persona before 3.4 cross-persona boost. Cross-persona agreement across the *kept* finding still qualifies for the anchor-step promotion in 3.4; demoted variants do not participate in cross-persona promotion (they are observational only after collapse).
 
@@ -71,8 +69,6 @@ When 2+ independent personas flagged the same merged finding (from 3.3), promote
 Independent corroboration is strong signal — multiple reviewers converging on the same issue is more reliable than any single reviewer's anchor. Promoting by one anchor step is semantically meaningful (a "verified but nitpick" finding that two personas independently surface is plausibly "will hit in practice"). This replaces the prior `+0.10` boost — the magic-number bump was calibrated to the continuous scale and no longer applies.
 
 Note the promotion in the Reviewer column of the output (e.g., `coherence, feasibility (+1 anchor)`).
-
-**Cross-model returns count as independent personas here.** When the cross-model judgment pass ran (see `references/cross-model-review.md`), each peer return enters synthesis as a reviewer named `<reviewer-name>-<provider>` (e.g. `adversarial-codex`, `security-lens-grok`, `product-lens-composer` — whichever different provider was resolved). For 3.3 fingerprint matching and this 3.4 promotion it is treated exactly like any other independent persona. Agreement between a `<reviewer-name>-<provider>` return and its in-process twin (`<reviewer-name>`) is the **strongest** corroboration signal in the set — different model providers in separate processes, not one model's self-agreement — so it promotes by the normal one anchor step and is rendered `<reviewer-name>, <reviewer-name>-<provider> (+1 anchor)` (e.g. `adversarial, adversarial-codex (+1 anchor)`). **In user-facing Phase 4 output, render the peer legibly as a cross-model reviewer that names its model** — e.g. `adversarial + cross-model: Grok 4.5 (+1 anchor)`, and for a cursor-agent route name the route too (`… via cursor-agent`) so grok-vs-composer is unambiguous — rather than surfacing the raw `<lens>-<provider>` token; the stored `reviewer` field keeps the `<lens>-<provider>` form for fingerprinting. Twin matching uses the 3.3 cross-model exception: same section plus >50% evidence-substring overlap counts even when titles diverge. **The whole-document sweep** (`whole-doc-<provider>`, R20) is also an independent cross-model reviewer, but it has **no in-process twin** — so it does not use the twin exception; its findings dedup and corroborate by the normal section+title fingerprint against *any* in-process reviewer, and a match promotes one anchor step just the same (rendered e.g. `feasibility, whole-doc-codex (+1 anchor)`). **Corroboration only, never apply authority:** a peer-only finding is never silently applied as `safe_auto` — not by the peer returning that class, and **not via the 3.6 promotion scan** (see the cross-model peer cap in 3.6 and the safeguard in 3.7); it caps at `gated_auto` (user confirms) unless an in-process reviewer independently corroborates it. **Peer agreement alone also does not promote the anchor.** The one-step promotion in this rule requires at least one *in-process* (non-peer) contributing reviewer — mirroring the 3.6 autofix cap on the anchor axis. A merged finding whose contributors are *all* cross-model peers — e.g. a peer-only finding that the trio twin `<lens>-<provider>` and the whole-doc sweep `whole-doc-<provider>` both raised but no bare in-process `<lens>` reviewer did — is **not** promoted: it keeps its original anchor (and stays capped at `gated_auto` per 3.6). This holds *a fortiori* in the default single-peer config, where every peer return shares one resolved provider/model, so peer-peer agreement is one model agreeing with itself — which never counts as corroboration. Cross-model agreement also adds **at most one** anchor step even when an opt-in second peer also agrees — the bonus does not stack per agreeing peer, and applies only when an in-process reviewer anchors the finding. This is a naming/attribution clarification of the existing promotion rule, not a new mechanic: the peer return is one more independent persona, nothing else changes.
 
 This replaces the earlier residual-concern promotion step. Findings at anchors `0` / `25` are not promoted back into the review surface; they appear only as drop counts in Coverage. If a dropped finding is genuinely important, the reviewer should raise their anchor to `50` or higher through stronger evidence rather than relying on a promotion rule.
 
@@ -87,8 +83,8 @@ When personas disagree on the same section:
 
 Specific conflict patterns:
 
-- Coherence says "keep for consistency" + scope-guardian says "cut for simplicity" → combined finding, let user decide
-- Feasibility says "this is impossible" + product-lens says "this is essential" → P1 finding framed as a tradeoff
+- Coherence says "keep for consistency" + adversarial says "cut for simplicity" → combined finding, let user decide
+- Feasibility says "this is impossible" + design-lens says "this is essential for UX" → P1 finding framed as a tradeoff
 - Multiple personas flag the same issue (no disagreement) → handled in 3.3 merge, not here
 
 ### 3.5b Deterministic Recommended-Action Tie-Break
@@ -116,7 +112,7 @@ If the contributing personas are all silent on action (e.g., a merged `manual` f
 
 This gate holds for every branch of the tie-break: if the winning action is `Apply` but the merged finding has no `suggested_fix` after 3.6 (Promote) and 3.7 (Route) have run, downgrade to `Defer`. The walk-through still lets the user pick any of the four options; this rule only governs the agent's default recommendation so the best-judgment path and bulk-preview never schedule a non-executable Apply.
 
-**Conflict-context surface.** When the tie-break fires (contributing personas implied different actions), record a one-line conflict-context string on the merged finding. The walk-through renders this on the R15 conflict-context line (see `references/walkthrough.md`). Example: `Coherence recommends Apply; scope-guardian recommends Skip. Agent's recommendation: Skip.`
+**Conflict-context surface.** When the tie-break fires (contributing personas implied different actions), record a one-line conflict-context string on the merged finding. The walk-through renders this on the R15 conflict-context line (see `references/walkthrough.md`). Example: `Coherence recommends Apply; adversarial recommends Skip. Agent's recommendation: Skip.`
 
 **Downstream invariant.** The walk-through and bulk-preview never recompute the recommendation — they read `recommended_action` and render `(recommended)` on the matching option. Best-judgment-the-rest and routing option B execute the `recommended_action` across the scoped finding set in bulk. This keeps best-judgment outcomes reproducible and auditable: the same review artifact always produces the same bulk plan.
 
@@ -201,8 +197,6 @@ Scan `manual` findings for promotion to `safe_auto` or `gated_auto`. Promote whe
 
 Do not promote if the finding involves scope or priority changes where the author may have weighed tradeoffs invisible to the reviewer.
 
-**Cross-model peer cap.** A finding whose reviewers are *only* cross-model peers (a `<lens>-<provider>` name such as `adversarial-codex`, with no bare in-process `<lens>` reviewer) — i.e. one no in-process reviewer independently raised — is **never** promoted to `safe_auto` here; cap it at `gated_auto` (user confirms) at most. A peer is a corroboration signal, not an apply authority (R18): silent apply requires in-process corroboration, so only a peer finding that *merged* with its in-process twin in 3.3 (its Reviewer shows both `<lens>` and `<lens>-<provider>`) may reach `safe_auto` under the normal rules. This is independent of the peer's returned `autofix_class` — the promotion scan, not just the peer's own classification, is capped.
-
 **Strawman-downgrade safeguard.** If a `safe_auto` finding names dismissed alternatives in `why_it_matters` (per the subagent template's strawman rule), verify the alternatives are genuinely strawmen. If any alternative is a plausible design choice that the persona dismissed too aggressively, downgrade to `gated_auto` so the user sees the tradeoff before the fix applies.
 
 ### 3.7 Route by Autofix Class
@@ -222,8 +216,6 @@ Findings reaching 3.7 have already been gated to anchors `50`, `75`, or `100` by
 | `75`   | `gated_auto`  | Enter the per-finding walk-through with Apply marked (recommended). Requires `suggested_fix`. Demote to `manual` if missing. |
 | `75`   | `manual`      | Enter the per-finding walk-through with user-judgment framing. `suggested_fix` is optional. |
 | `50`   | any           | Surface in the FYI subsection regardless of `autofix_class`. Do not enter the walk-through or any bulk action. These are observations, not decisions. |
-
-**Cross-model peer safeguard.** If a finding reaching this step is `safe_auto` but its only reviewers are cross-model peers (a `<lens>-<provider>` name with no in-process co-reviewer), demote it to `gated_auto` before routing — a peer cannot authorize a silent apply on its own (R18). This backstops 3.6's peer cap for any peer finding that arrived already classified `safe_auto`.
 
 **Auto-eligible patterns for safe_auto:** summary/detail mismatch (body authoritative over overview), wrong counts, missing list entries derivable from elsewhere in the document, stale internal cross-references, terminology drift, prose-vs-diagram inconsistency where the diagram can be mechanically updated to match the prose (deletion is never the fix — diagrams are intentional communication choices that aid spatial comprehension, not redundancy with prose), missing steps mechanically implied by other content, unstated thresholds implied by surrounding context.
 

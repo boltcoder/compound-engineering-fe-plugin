@@ -54,7 +54,7 @@ Same pipeline for default and `mode:agent`:
 - **No blocking prompts.** Never use `AskUserQuestion`, `request_user_input`, `ask_user`, or other blocking question tools. Infer intent, plan, and scope from explicit tokens, git state, PR metadata, and conversation. Note uncertainty in Coverage or the verdict — do not stop to ask.
 - **Explicit mutations only.** Never run `gh pr checkout`, `git checkout`, `git switch`, or similar branch-switch commands. Passing a PR number, URL, or branch name selects **review scope**, not permission to mutate the working tree. To review local uncommitted work on a feature branch, check out that branch yourself (or stay on it) and pass `base:` or no target.
 - **Smart defaults.** Untracked files: review tracked changes only and list excluded paths in Coverage. Plan: use `plan:` when passed; otherwise discover conservatively from PR body or branch keywords. Weak advisory P2/P3 from testing/maintainability alone: demote to `testing_gaps` / `residual_risks` per Stage 5.
-- **Report outcomes, not machinery.** What you show the user is about the review: what's being examined (the PR/branch), which coverage is included and the one-line reason for each conditional lens, the independent cross-model pass and which model runs it, and the findings. Keep the skill's internals out of user-facing text — model-tier assignments, raw scope-mode codenames (`local-aligned`/`pr-remote`), staging the diff to disk, loading persona files, parallel-dispatch bookkeeping, and step-by-step narration of your own setup. Name what the user would recognize (a PR number, a reviewer's concern, a peer model), not the plumbing. This governs *what* you surface and suppress; it does not script the wording — use your own voice.
+- **Report outcomes, not machinery.** What you show the user is about the review: what's being examined (the PR/branch), which coverage is included and the one-line reason for each conditional lens, and the findings. Keep the skill's internals out of user-facing text — model-tier assignments, raw scope-mode codenames (`local-aligned`/`pr-remote`), staging the diff to disk, loading persona files, parallel-dispatch bookkeeping, and step-by-step narration of your own setup. Name what the user would recognize (a PR number, a reviewer's concern), not the plumbing. This governs *what* you surface and suppress; it does not script the wording — use your own voice.
 
 ## Output format
 
@@ -109,27 +109,20 @@ Routing rules:
 
 ## Reviewers
 
-13 reviewer personas in layered conditionals, plus CE local prompt assets. Quick roster with one-line triggers below; the persona catalog in `references/persona-catalog.md` (read it at Stage 3) has the full per-persona selection criteria and spawn gates. Each selected reviewer is a generic subagent seeded with a local prompt file from `references/personas/`; do not dispatch standalone agents by type/name.
+9 reviewer personas in layered conditionals, plus the CE learnings-researcher local prompt asset. Quick roster with one-line triggers below; the persona catalog in `references/persona-catalog.md` (read it at Stage 3) has the full per-persona selection criteria and spawn gates. Each selected reviewer is a generic subagent seeded with a local prompt file from `references/personas/`; do not dispatch standalone agents by type/name.
 
-**Always-on (full review):** local prompt assets `correctness-reviewer`, `testing-reviewer`, `maintainability-reviewer`, `project-standards-reviewer`, plus CE local prompt assets `agent-native-reviewer` and `learnings-researcher`. (Stage 3c may reduce this set to a lite roster for trivial, low-risk diffs.)
+**Always-on (full review):** local prompt assets `correctness-reviewer`, `testing-reviewer`, `maintainability-reviewer`, `project-standards-reviewer`, plus CE local prompt asset `learnings-researcher`. (Stage 3c may reduce this set to a lite roster for trivial, low-risk diffs.)
 
 **Cross-cutting conditional (per diff):**
 
-- `security-reviewer` — auth, public endpoints, user input, permissions
-- `performance-reviewer` — DB queries, data transforms, caching, async
+- `performance-reviewer` — expensive renders, unnecessary re-renders, bundle size, heavy data transforms, caching, async
 - `api-contract-reviewer` — routes, serializers, type signatures, versioning
-- `data-migration-reviewer` — migration files / schema dumps / backfills (see spawn gate in Stage 3)
 - `reliability-reviewer` — error handling, retries, timeouts, background jobs
-- `adversarial-reviewer` — >=50 changed code lines, or auth / payments / data mutations / external APIs, or a **silent-pass verification mechanism** (CI/CD gating logic, merge-blocking checks, build/deploy steps, coverage/lint gates, or test infrastructure/mocks that could mask production) regardless of size. When selected, a **cross-model adversarial pass** (Stage 4) additionally runs the same brief through a different model provider via a peer CLI — additive, non-blocking
-- `previous-comments-reviewer` — PR with existing review comments (PR-only, comment-gated)
-
-**Stack-specific conditional (per diff):** `julik-frontend-races-reviewer` (Stimulus/Turbo, DOM events, async UI) and `swift-ios-reviewer` (Swift/SwiftUI/UIKit, entitlements, Core Data, `.pbxproj`).
-
-**CE conditional (migration-specific):** local prompt asset `deployment-verification-agent` — deployment checklist + rollback when the migration gate applies and the change is risky.
+- `adversarial-reviewer` — >=50 changed code lines, or auth / payments / data mutations / external APIs, or a **silent-pass verification mechanism** (CI/CD gating logic, merge-blocking checks, build/deploy steps, coverage/lint gates, or test infrastructure/mocks that could mask production) regardless of size.
 
 ## Review Scope
 
-A full review spawns generic subagents for all 4 always-on personas plus the 2 CE always-on local prompt assets, then adds whichever cross-cutting and stack-specific conditionals fit the diff (Stage 3c can collapse this to a lite roster for trivial, low-risk diffs). The model naturally right-sizes: a small config change triggers 0 conditionals = 6 reviewers. A Rails auth feature might trigger security + reliability + adversarial = 9 reviewers.
+A full review spawns generic subagents for all 4 always-on personas plus the 1 CE always-on local prompt asset, then adds whichever cross-cutting conditionals fit the diff (Stage 3c can collapse this to a lite roster for trivial, low-risk diffs). The model naturally right-sizes: a small config change triggers 0 conditionals = 5 reviewers. A feature touching API contracts and error handling might trigger api-contract + reliability = 7 reviewers.
 
 ## Protected Artifacts
 
@@ -234,7 +227,7 @@ When **`pr-remote`**, before Stage 4:
 
 1. Best-effort fetch PR head without checkout: `git fetch --no-tags origin <headRefName>:refs/review/pr-<number>-head` (substitute PR number from metadata).
 2. When fetch succeeds, set `PR_HEAD_REF=refs/review/pr-<number>-head` for reviewers and validators. When fetch fails, omit `PR_HEAD_REF` and note in Coverage — reviewers must rely on diff hunks only.
-3. Best-effort fetch the PR base without checkout: `git fetch --no-tags origin <baseRefName>`. When it succeeds, resolve a concrete ref with `git rev-parse FETCH_HEAD` and set `PR_BASE_REF` to that SHA — a **real git base ref** reviewers and validators use for file-level git diffs (e.g. `data-migration-reviewer` runs `git diff <PR_BASE_REF> -- db/schema.rb`/`structure.sql`). The `pr:<number-or-url>` logical marker in `BASE:` stays the scope marker; `PR_BASE_REF` is the diffable base. When the fetch fails, omit `PR_BASE_REF` and note in Coverage — schema-drift and other git-diff checks fall back to diff hunks only and must **not** assume `main`.
+3. Best-effort fetch the PR base without checkout: `git fetch --no-tags origin <baseRefName>`. When it succeeds, resolve a concrete ref with `git rev-parse FETCH_HEAD` and set `PR_BASE_REF` to that SHA — a **real git base ref** reviewers and validators use for file-level git diffs. The `pr:<number-or-url>` logical marker in `BASE:` stays the scope marker; `PR_BASE_REF` is the diffable base. When the fetch fails, omit `PR_BASE_REF` and note in Coverage — git-diff checks fall back to diff hunks only and must **not** assume `main`.
 4. Include `<pr-scope-mode>pr-remote</pr-scope-mode>` and, when set, `<pr-head-ref>...</pr-head-ref>` and `<pr-base-ref>...</pr-base-ref>` in the Stage 4 review context bundle.
 
 Reviewers and Stage 5b validators in **`pr-remote`** mode must **not** Read/Grep workspace paths for files in `FILES:`. Inspect via `git show <PR_HEAD_REF>:<path>` when `PR_HEAD_REF` is set, otherwise use only the provided diff hunks. **`local-aligned`** uses normal workspace inspection.
@@ -297,19 +290,17 @@ else
   # itself starts with + or - (markdown bullets, unary minus, `++i`) is miscounted. Keep the
   # globs single-quoted and inline so the shell passes them to git literally (an unquoted or
   # variable-held glob would be expanded against the CWD before git ever sees it).
-  EXEC_LINES=$(git diff --numstat "$DIFF_A" $DIFF_B -- '*.rb' '*.py' '*.js' '*.jsx' '*.ts' '*.tsx' '*.go' '*.rs' '*.java' '*.swift' '*.kt' '*.c' '*.cc' '*.cpp' '*.cs' '*.php' '*.ex' '*.exs' '*.scala' 2>/dev/null | awk '{s+=$1+$2} END{print s+0}')
+  EXEC_LINES=$(git diff --numstat "$DIFF_A" $DIFF_B -- '*.rb' '*.py' '*.js' '*.jsx' '*.ts' '*.tsx' '*.go' '*.rs' '*.java' '*.kt' '*.c' '*.cc' '*.cpp' '*.cs' '*.php' '*.ex' '*.exs' '*.scala' 2>/dev/null | awk '{s+=$1+$2} END{print s+0}')
   echo "EXEC_LINES:$EXEC_LINES"
   FILES=$(git diff --name-only "$DIFF_A" $DIFF_B 2>/dev/null)
   # UNCOUNTED_FILES = changed files NOT in the counted code set (skill prose, schemas, configs,
   # scripts, lockfiles, unknown extensions). Any >0 disqualifies the lite path (fail closed).
-  UNCOUNTED=$(printf '%s\n' "$FILES" | awk 'NF && $0 !~ /\.(rb|py|js|jsx|ts|tsx|go|rs|java|swift|kt|c|cc|cpp|cs|php|ex|exs|scala)$/ {n++} END{print n+0}')
+  UNCOUNTED=$(printf '%s\n' "$FILES" | awk 'NF && $0 !~ /\.(rb|py|js|jsx|ts|tsx|go|rs|java|kt|c|cc|cpp|cs|php|ex|exs|scala)$/ {n++} END{print n+0}')
   echo "UNCOUNTED_FILES:$UNCOUNTED"
   echo "SIGNALS:"
   # here-strings (no pipe) — a piped `grep -q` can drop a true match under `set -o pipefail` via SIGPIPE.
-  grep -qiE 'db/migrate/|schema\.(rb|sql)|/migrations?/|alembic|flyway|liquibase' <<< "$FILES" && echo "  migrations" || true
-  grep -qiE '\.(tsx|jsx|vue|svelte|css|scss|html|erb|haml)$|/components?/|stimulus|turbo' <<< "$FILES" && echo "  frontend" || true
+  grep -qiE '\.(tsx|jsx|vue|svelte|css|scss|html)$|/components?/|stimulus|turbo' <<< "$FILES" && echo "  frontend" || true
   grep -qiE '/(routes?|controllers?|api|serializers?|graphql)/|\.proto$|openapi|swagger' <<< "$FILES" && echo "  api" || true
-  grep -qiE '\.(swift|kt|pbxproj|xcconfig|entitlements)$' <<< "$FILES" && echo "  swift-ios" || true
 fi
 ```
 
@@ -373,40 +364,25 @@ When a profile is in hand, include a short stack/conventions orientation slice f
 
 ### Stage 3: Select reviewers
 
-Read the diff and file list from Stage 1, and the `SIGNALS` / `EXEC_LINES` from Stage 1b. The 4 always-on personas and 2 CE always-on agents are automatic. Read `references/persona-catalog.md` from this skill's directory now — it carries the full per-persona selection criteria and spawn gates the one-line roster above only summarizes. For each cross-cutting and stack-specific conditional persona in that catalog, decide whether the diff warrants it. This is agent judgment, not keyword matching — a `SIGNALS` hit (`migrations`, `frontend`, `api`, `swift-ios`) is a *prompt* to consider the matching persona, not an instruction to spawn it; confirm the runtime concern is real in the diff before adding it, and add content-gated personas (`security`, `reliability`, `adversarial`) from the diff as before since those are not path-derivable.
+Read the diff and file list from Stage 1, and the `SIGNALS` / `EXEC_LINES` from Stage 1b. The 4 always-on personas and 1 CE always-on local prompt asset are automatic. Read `references/persona-catalog.md` from this skill's directory now — it carries the full per-persona selection criteria and spawn gates the one-line roster above only summarizes. For each cross-cutting conditional persona in that catalog, decide whether the diff warrants it. This is agent judgment, not keyword matching — a `SIGNALS` hit (`frontend`, `api`) is a *prompt* to consider the matching persona, not an instruction to spawn it; confirm the runtime concern is real in the diff before adding it, and add content-gated personas (`reliability`, `adversarial`) from the diff as before since those are not path-derivable.
+
+When the `frontend` signal is present (React components, TypeScript types, CSS/Tailwind, hooks, or state management in the diff), also read `references/frontend-review-checklist.md` from this skill's directory. It carries concrete frontend checks (rendering perf, type correctness, a11y, bundle size, CSS/Tailwind, state, hooks, code smells, change sizing) to fold into the matching personas' review prompts at Stage 4 dispatch.
 
 **File-type awareness for conditional selection:** Instruction-prose files (Markdown skill definitions, JSON schemas, config files) are product code but do not benefit from runtime-focused reviewers. The adversarial reviewer's techniques (race conditions, cascade failures, abuse cases) target executable code behavior. For diffs that only change instruction-prose files, skip adversarial unless the prose describes auth, payment, or data-mutation behavior, or the change is itself a silent-pass verification mechanism (next paragraph — a CI/CD workflow is a config file but still gets the adversarial lens). Count only executable code lines toward line-count thresholds.
 
-**Silent-pass verification mechanisms — adversarial fires on the guard itself.** When the change *is* a verification mechanism — CI/CD gating logic, merge-blocking checks, build/deploy steps, coverage/lint gates, or test infrastructure/mocks that could mask production — its risk isn't blast radius, it's fidelity: it can go green while the real thing is red, so the exact "can this false-pass?" lens must run. Select `adversarial` (and therefore the Stage-4 cross-model pass) for such a change regardless of changed-line count and independent of the auth/data heuristics. The selection question: "If this mechanism is wrong, does it fail loudly or silently pass? A silent-pass guard gets the adversarial + cross-model lens regardless of size." Scope guard: this fires on the *mechanism* (gating/CI/build/deploy/harness changes), not on ordinary per-feature test assertions — a unit test asserting business logic is the `testing` reviewer's job, not adversarial's.
-
-**`previous-comments` is PR-only AND comment-gated.** Only select this persona when both conditions hold:
-
-1. Stage 1 gathered PR metadata (PR number or URL was provided as an argument, or `gh pr view` returned metadata for the current branch).
-2. `hasPriorComments` from Stage 1 is true (the PR has at least one review submission or issue comment).
-
-Skip it for standalone branch reviews with no associated PR, and skip it for PRs with no prior feedback yet -- there is nothing for the persona to verify, and a spawned subagent that returns empty findings still costs the full subagent startup overhead (persona spec, diff, schema, plus its own gh calls).
-
-Stack-specific personas are additive when runtime behavior warrants them. A Hotwire UI change may warrant `julik-frontend-races`; a TypeScript API diff may warrant `api-contract` and `reliability`.
-
-**`data-migration` spawn gate.** Select `data-migration-reviewer` only when the diff includes at least one migration or schema artifact: `db/migrate/*`, `db/schema.rb`, `db/structure.sql`, Alembic/Flyway/Liquibase migration paths, or explicit backfill/data-transform scripts (rake tasks, one-off data migration classes). **Do not spawn** for model-only changes, query-only refactors, serializers/controllers that reference columns without a migration or schema dump in the diff, or migration tests alone.
-
-For `deployment-verification-agent`, use the same migration-artifact gate when the change is risky (destructive DDL, backfills, NOT NULL without default, column renames/drops).
+**Silent-pass verification mechanisms — adversarial fires on the guard itself.** When the change *is* a verification mechanism — CI/CD gating logic, merge-blocking checks, build/deploy steps, coverage/lint gates, or test infrastructure/mocks that could mask production — its risk isn't blast radius, it's fidelity: it can go green while the real thing is red, so the exact "can this false-pass?" lens must run. Select `adversarial` for such a change regardless of changed-line count and independent of the auth/data heuristics. The selection question: "If this mechanism is wrong, does it fail loudly or silently pass? A silent-pass guard gets the adversarial lens regardless of size." Scope guard: this fires on the *mechanism* (gating/CI/build/deploy/harness changes), not on ordinary per-feature test assertions — a unit test asserting business logic is the `testing` reviewer's job, not adversarial's.
 
 Announce the team before spawning, as a user-facing summary: name the always-on reviewers plainly, and for each conditional reviewer give the one-line reason it was added (the real concern, not the keyword that matched). Do **not** put model-tier labels (`[session model]`/`[mid-tier]`) or scope-mode codenames in this announce — those are internal. Still *decide* each reviewer's tier here and keep it in your own working notes (Stage 4 applies it at dispatch as a correctness guarantee); just keep it out of this user-facing summary.
-
-If the cross-model adversarial pass will run (adversarial selected + `local-aligned`/standalone scope), attest the host provider and resolve peer preference via `references/cross-model-review.md`, then surface it **as its own prominent line** that frames an independent cross-model adversarial review, names the concrete model/reasoning (and cursor-agent route when used), and notes that reviewed code/diff may egress to that provider — keep it with the team, not buried after it. Honor that reference's announce rules (interactive default mode; silent in `mode:agent`). If it won't run or the host is un-attestable, omit the prominent line (quiet skip is fine).
 
 Illustrative shape only — match your own voice, do not copy verbatim:
 
 ```
 Reviewing PR #1234 (against main)
 
-Also running an independent adversarial pass via a different model: Codex.
-
 Reviewers:
-- correctness, testing, maintainability, project-standards, agent-native, learnings (always)
-- security — new endpoint accepts a user-provided redirect URL
-- data-migration — adds migration 20260303_add_index_to_orders
+- correctness, testing, maintainability, project-standards, learnings (always)
+- reliability — new error boundary swallows errors without retry
+- adversarial — auth flow changes with >50 changed lines
 ```
 
 This is progress reporting, not a blocking confirmation.
@@ -428,13 +404,13 @@ Pass the resulting path list to the `project-standards` persona inside a `<stand
 
 - `EXEC_LINES` from Stage 1b is a **number** (not `UNKNOWN`) and **between 1 and 39**, AND
 - `UNCOUNTED_FILES` from Stage 1b is **0** — i.e. *every* changed file is counted application code. Any uncounted file (skill `.md`, JSON schema, `.sh`/CI/config, lockfile, unknown extension) disqualifies the lite path. This guard is load-bearing on **mixed** diffs the line count alone would pass: 15 exec lines of application code plus two `.md` skill files reads `EXEC_LINES:15` with `UNCOUNTED_FILES:2`, and the uncounted files force the **full** roster. (This plugin's own product surface — `skills/**`, `SKILL.md`, `references/**`, schemas — is uncounted.) AND
-- Stage 1b `SIGNALS` is **empty** (no `migrations`, `frontend`, `api`, or `swift-ios`), AND
+- Stage 1b `SIGNALS` is **empty** (no `frontend`, `api`), AND
 - No content-based risk read from the diff in Stage 3 (auth, payments, data mutation, external API, secrets/permissions, deserialization, crypto, concurrency/background jobs, filesystem/process execution), AND
 - No conditional persona was selected in Stage 3.
 
 `EXEC_LINES:UNKNOWN` (unresolved base) or `UNCOUNTED_FILES > 0` are **hard disqualifiers** — never lite. A pure code diff that also touches one `.md` runs the full roster; that conservatism is the point.
 
-**Lite roster:** the inline fast pass (Stage 4) plus `correctness-reviewer` and `project-standards-reviewer` only — skip `testing`, `maintainability`, `agent-native`, and `learnings`. Announce the reduction plainly (e.g. "Small diff (28 exec lines, code-only, no risk signals) — running a lite review: fast pass + correctness + standards.") and note it in Coverage.
+**Lite roster:** the inline fast pass (Stage 4) plus `correctness-reviewer` and `project-standards-reviewer` only — skip `testing`, `maintainability`, and `learnings`. Announce the reduction plainly (e.g. "Small diff (28 exec lines, code-only, no risk signals) — running a lite review: fast pass + correctness + standards.") and note it in Coverage.
 
 **Do not collapse** when any gate condition fails — the gate keys on risk, not size alone (a 12-line auth change still needs the full roster). When in doubt (signals ambiguous, risk unclear, count `UNKNOWN`), run the full roster.
 
@@ -463,7 +439,7 @@ When Stage 3c selected the lite roster, the fast pass still runs.
 
 #### Model tiering
 
-Three reviewers inherit the session model with no override: `correctness-reviewer`, `security-reviewer`, and `adversarial-reviewer`. These perform the highest-stakes analysis — logic bugs, security vulnerabilities, adversarial failure scenarios — and should run at whatever capability level the user has configured. If the user is on Opus, these get Opus.
+Two reviewers inherit the session model with no override: `correctness-reviewer` and `adversarial-reviewer`. These perform the highest-stakes analysis — logic bugs, adversarial failure scenarios — and should run at whatever capability level the user has configured. If the user is on Opus, these get Opus.
 
 All other persona subagents and CE local prompt assets use the platform's mid-tier model to reduce cost and latency. See the Spawning subsection below for the exact dispatch-time override.
 
@@ -488,7 +464,7 @@ Omit the `mode` parameter when dispatching sub-agents so the user's configured p
 
 **Model override at dispatch time — this is a correctness guarantee, not cosmetics.** Omitting the override on a top-tier parent session (e.g. Opus) silently runs that reviewer at the expensive tier — the regression this prevents. The tier is a deterministic function of the persona, so as you select reviewers in Stage 3, **record each reviewer's tier in an internal working list** — that list is your external memory (the role the old printed `[session model]`/`[mid-tier]` labels served) and it must exist and be honored even though it is no longer rendered in the user-facing announce:
 
-- **Session model** (no override; inherits the session model) — `correctness-reviewer`, `security-reviewer`, and `adversarial-reviewer` only.
+- **Session model** (no override; inherits the session model) — `correctness-reviewer` and `adversarial-reviewer` only.
 - **Mid-tier** — every other persona and CE agent: pass the platform's balanced mid-tier model. In Claude Code, that is the Sonnet class. In Codex, apply this tier only when the active dispatch primitive exposes an explicit model or custom-agent selector; task wording alone does not select a different model. Otherwise omit the override and inherit the parent model — a working review on the parent model beats a broken dispatch on an unrecognized name.
 
 Apply this on **every** Agent / `spawn_agent` / subagent call in the parallel dispatch. A missed override is a silent cost-and-quality regression, so treat the internal tier list as load-bearing — moving it out of the user-facing output removed the *display*, not the discipline.
@@ -506,7 +482,6 @@ For each selected reviewer, read the corresponding local prompt asset from `refe
 5. Review context: intent summary, file list, diff, scope mode (`local-aligned` | `pr-remote` | `branch-remote`), and remote head ref (`PR_HEAD_REF` or `<branch-head-ref>`) when set
 6. Run ID and reviewer name for the artifact file path
 7. **For `project-standards` only:** the standards file path list from Stage 3b, wrapped in a `<standards-paths>` block appended to the review context
-8. **For `data-migration` only:** the resolved review base ref from Stage 1 (`BASE:` marker), wrapped in `<review-base>` inside the review context so schema drift checks never assume `main`
 
 Persona sub-agents are **read-only** with respect to the project: they review and return structured JSON. They do not edit project files or propose refactors. The one permitted write is saving their full analysis to the run-artifact path specified in the output contract (under `/tmp/compound-engineering/ce-code-review/<run-id>/`).
 
@@ -516,10 +491,10 @@ Each persona sub-agent writes full JSON (all schema fields) to `/tmp/compound-en
 
 ```json
 {
-  "reviewer": "security",
+  "reviewer": "reliability",
   "findings": [
     {
-      "title": "User-supplied ID in account lookup without ownership check",
+      "title": "Unhandled promise rejection in async data fetch",
       "severity": "P0",
       "file": "orders_controller.rb",
       "line": 42,
@@ -528,8 +503,8 @@ Each persona sub-agent writes full JSON (all schema fields) to `/tmp/compound-en
       "owner": "downstream-resolver",
       "requires_verification": true,
       "pre_existing": false,
-      "suggested_fix": "Add current_user.owns?(account) guard before lookup",
-      "first_evidence": "orders_controller.rb:42 -- account = Account.find(params[:account_id])"
+      "suggested_fix": "Wrap fetch call in try/catch with error boundary fallback",
+      "first_evidence": "useFetch.ts:42 -- const data = await fetch(url).then(r => r.json())"
     }
   ],
   "residual_risks": [...],
@@ -541,15 +516,7 @@ Each persona sub-agent writes full JSON (all schema fields) to `/tmp/compound-en
 
 The artifact file **must** carry the full detail-tier fields (`why_it_matters`, `evidence`); the compact *return* omits all detail-tier fields **except `first_evidence`**, but writing the compact shape to the artifact (a common reviewer slip) silently strips the detail Coverage and the keyed detail lines depend on. However review context is delivered — inlined, or staged to disk for a large diff — each reviewer still receives the full subagent-template output contract; staging context never licenses a thinner one. `suggested_fix` is optional in both tiers -- included in compact returns when present so callers can apply fixes after review. If the file write fails, the compact return still provides everything the merge needs.
 
-**CE always-on local prompt assets** (`agent-native-reviewer`, `learnings-researcher`) are dispatched as generic subagents through the same bounded parallel scheduler as the structured personas. Read their prompt files from `references/personas/`, then give them the same review context bundle the personas receive: entry mode, any PR metadata gathered in Stage 1, intent summary, review base branch name when known, `BASE:` marker, file list, diff, and `UNTRACKED:` scope notes. Do not invoke them with a generic "review this" prompt. Their output is unstructured and synthesized separately in Stage 6.
-
-**CE conditional local prompt assets** (`deployment-verification-agent` only) are dispatched as generic subagents through the same bounded parallel scheduler when the migration-artifact gate applies. Read the prompt file from `references/personas/`, then pass the same review context bundle plus the applicability reason (for example, which migration files triggered the prompt asset). Its output is unstructured and must be preserved for Stage 6 synthesis just like the CE always-on prompt assets. Schema drift is handled by the `data-migration` persona as structured findings — not here.
-
-#### Cross-model adversarial pass
-
-When `adversarial-reviewer` was selected (Stage 3) **and** scope is `local-aligned` or standalone, also run the same adversarial brief through **one different model provider than the host** in a separate read-only process — genuine independence the in-process subagent cannot provide. **Launch it in parallel with the persona reviewers, not after them:** the peer call is a CLI shell-out (a background Bash process, not a subagent), so it does not consume the subagent concurrency budget and its ~2-5 min runtime overlaps the in-process reviews instead of adding to them. Kick it off as a background shell process in the same dispatch wave as the Stage 4 reviewers, then **await its exit before Stage 5**. (If the harness cannot background a shell command, run it inline before awaiting the reviewers — correctness is unaffected, only wall-clock.) Load `references/cross-model-review.md` and follow it: **attest the host provider** (Claude Code → `claude`; Codex → `codex`; Cursor → its active serving provider; un-attestable → skip, never guess), **resolve the peer preference** into a comma-separated candidate list (conversation → `.compound-engineering/config.local.yaml` `cross_model_peer:` → project instructions in context → default `codex,claude,grok,composer`), and invoke the bundled script with `host_provider`, `candidates`, Stage 1 `BASE`, and the run dir. The script owns availability probing, host exclusion, grok→cursor-agent fallback, and writing `adversarial-<provider>.json` only after normalize. This pass is **adversarial-only** — no other persona gets a cross-model twin.
-
-That return enters Stage 5 as reviewer `adversarial-<provider>`, like any persona artifact. The pass is **non-blocking** — skip silently when the host is un-attestable, no different provider is reachable, the peer CLI is missing/unauthed, or it errors/times out. Skip it entirely in `pr-remote` / `branch-remote` scope (the peer would review the local tree, not the reviewed head). Announce per that reference's announce rules — interactive hosts in default mode (with egress disclosure); silent in `mode:agent` (stderr audit log still records egress).
+**CE always-on local prompt asset** (`learnings-researcher`) is dispatched as a generic subagent through the same bounded parallel scheduler as the structured personas. Read its prompt file from `references/personas/`, then give it the same review context bundle the personas receive: entry mode, any PR metadata gathered in Stage 1, intent summary, review base branch name when known, `BASE:` marker, file list, diff, and `UNTRACKED:` scope notes. Do not invoke it with a generic "review this" prompt. Its output is unstructured and synthesized separately in Stage 6.
 
 ### Stage 5: Merge findings
 
@@ -570,9 +537,9 @@ Convert multiple reviewer compact JSON returns into one deduplicated, confidence
    - **Quote-the-line gate (enforced here).** Any finding at anchor **75 or 100** must carry a non-empty `first_evidence` (the verbatim motivating line with `file:line`). A 75/100 finding missing `first_evidence` is **demoted to anchor 50** (record the demotion count for Coverage) — it then faces the normal anchor-50 fate in the confidence gate (dropped unless P0 or routed to a soft bucket).
    - Do not validate against the full schema here -- the full schema (including why_it_matters and evidence) applies to the artifact files on disk, not the compact returns.
 2. **Deduplicate.** Compute fingerprint: `normalize(file) + line_bucket(line, +/-3) + normalize(title)`. When fingerprints match, merge: keep highest severity, keep highest anchor, note which reviewers flagged it. Dedup runs over the full validated set (including anchor 50) so cross-reviewer promotion in step 3 can lift matching anchor-50 findings into the actionable tier.
-3. **Cross-reviewer agreement.** When 2+ independent reviewers flag the same issue (same fingerprint), promote the merged finding by one anchor step: `50 -> 75`, `75 -> 100`, `100 -> 100`. Note the agreement in the Reviewer column of the output (e.g., "security, correctness"). **Promotion never bypasses the quote-the-line gate (step 1).** A finding may sit at anchor 75 or 100 — whether originally or via this promotion — only if the merged finding carries `first_evidence`. If no contributing reviewer supplied it (e.g. two reviewers reported the same finding without the quote and step 1 demoted both to 50), cap the promotion at 50: agreement corroborates that the issue is *real*, but the quoted line is what licenses *high confidence*, and two un-quoted findings must not combine into a quote-free 75. When at least one contributor supplied `first_evidence`, the merged finding inherits it (step 2 keeps it) and promotes normally. The cross-model `adversarial-<provider>` return counts as an independent reviewer here; agreement between it and the in-process `adversarial` persona is the strongest signal in the set (different model providers, separate processes) — render it as `adversarial, adversarial-<provider>`. If the JSON's `reviewer` field is missing the `-<provider>` suffix, force it from the filename stem before fold-in. Peer findings never carry apply authority. The Stage 4 `fast-pass` pseudo-reviewer is the orchestrator's own read, **not** independent, so it **never counts toward this promotion** (and is capped at anchor 50): a `fast-pass`+persona fingerprint match is noted in the Reviewer column (e.g. "correctness, fast-pass") but does **not** bump the anchor — the persona's own independent anchor carries the finding. A `fast-pass`-only finding stays at anchor 50 (surfacing solo only when P0).
+3. **Cross-reviewer agreement.** When 2+ independent reviewers flag the same issue (same fingerprint), promote the merged finding by one anchor step: `50 -> 75`, `75 -> 100`, `100 -> 100`. Note the agreement in the Reviewer column of the output (e.g., "reliability, correctness"). **Promotion never bypasses the quote-the-line gate (step 1).** A finding may sit at anchor 75 or 100 — whether originally or via this promotion — only if the merged finding carries `first_evidence`. If no contributing reviewer supplied it (e.g. two reviewers reported the same finding without the quote and step 1 demoted both to 50), cap the promotion at 50: agreement corroborates that the issue is *real*, but the quoted line is what licenses *high confidence*, and two un-quoted findings must not combine into a quote-free 75. When at least one contributor supplied `first_evidence`, the merged finding inherits it (step 2 keeps it) and promotes normally. The Stage 4 `fast-pass` pseudo-reviewer is the orchestrator's own read, **not** independent, so it **never counts toward this promotion** (and is capped at anchor 50): a `fast-pass`+persona fingerprint match is noted in the Reviewer column (e.g. "correctness, fast-pass") but does **not** bump the anchor — the persona's own independent anchor carries the finding. A `fast-pass`-only finding stays at anchor 50 (surfacing solo only when P0).
 4. **Separate pre-existing.** Pull out findings with `pre_existing: true` into a separate list. **Exception — the change depends on it:** a pre-existing or adjacent-file gap that the change under review *relies on for its own correctness* stays in the primary findings, not the pre-existing list. The bar is a direct dependency — the new code is wrong, unsafe, or unverified *because of* this gap. Merely sitting nearby, or the repo being better without it, does not qualify: if the change would be correct regardless of the gap, it stays pre-existing. Do not widen this into general repo cleanup ("fix the whole repo").
-5. **Resolve disagreements.** When reviewers flag the same code region but disagree on severity, autofix_class, or owner, annotate the Reviewer column with the disagreement (e.g., "security (P0), correctness (P1) -- kept P0").
+5. **Resolve disagreements.** When reviewers flag the same code region but disagree on severity, autofix_class, or owner, annotate the Reviewer column with the disagreement (e.g., "reliability (P0), correctness (P1) -- kept P0").
 6. **Normalize routing.** For each merged finding, set the final `autofix_class`, `owner`, and `requires_verification`. If reviewers disagree, keep the more conservative route. Remap any legacy `safe_auto` or `review-fixer` to `gated_auto` / `downstream-resolver`.
 6b. **Mode-aware demotion of weak general-quality findings.** Some persona output is real signal but does not warrant primary-findings attention. Reroute it to the existing soft buckets so the primary findings table stays focused on actionable issues.
 
@@ -597,7 +564,7 @@ When a finding qualifies:
    - **Group shape:** short title, the included stable finding `#`s, one-line context, preferred resolution, and why — when one fix path resolves several findings, name it and say which finding to handle first.
    - **Ordering:** order groups by the highest-severity finding they contain, then by lowest stable `#`. A finding appears in at most one group; leave genuinely unrelated findings ungrouped.
 10. **Collect coverage data.** Union residual_risks and testing_gaps across reviewers.
-11. **Preserve CE local-prompt artifacts.** Keep the learnings, agent-native, and deployment-verification outputs alongside the merged finding set. Do not drop unstructured output just because it does not match the persona JSON schema. Schema drift from `data-migration` is already in the merged finding set.
+11. **Preserve CE local-prompt artifacts.** Keep the learnings output alongside the merged finding set. Do not drop unstructured output just because it does not match the persona JSON schema.
 
 ### Stage 5b: Validation pass (optional quality gate)
 
@@ -671,7 +638,7 @@ Assemble the final report. **Default:** human-readable markdown. **`mode:agent`:
 
 **Presentation direction — optimize for the reader's next action (goal + considerations, not a fixed layout).** The report is *acted on*: by a human deciding what to fix and whether to merge, or by a downstream agent applying fixes. Shape it so that action is fast and well-founded.
 
-- **Per finding, make four things unambiguous** (in whatever layout reads clearest): *what & where* — one scannable line, the symptom + `file:line`, not the mechanism; *why it matters* — what breaks or who's hit, never a restatement of the code; *what response it needs* — this varies by finding type: a bug states its fix, a **design call** presents the options and the tradeoff without forcing one answer, a coverage gap names the test and precedent to mirror, a residual risk is marked informational, an already-applied item gives what changed and how it was verified; *how sure* — confidence, and whether it was corroborated (cross-reviewer / cross-model agreement is the strongest signal — say so).
+- **Per finding, make four things unambiguous** (in whatever layout reads clearest): *what & where* — one scannable line, the symptom + `file:line`, not the mechanism; *why it matters* — what breaks or who's hit, never a restatement of the code; *what response it needs* — this varies by finding type: a bug states its fix, a **design call** presents the options and the tradeoff without forcing one answer, a coverage gap names the test and precedent to mirror, a residual risk is marked informational, an already-applied item gives what changed and how it was verified; *how sure* — confidence, and whether it was corroborated (cross-reviewer agreement is the strongest signal — say so).
 - **Let the shape serve the finding type; stay consistent within a section.** A terse table, a short keyed block, or a compact list are all fine — pick what reads clearest for that content. Consistency *within* a section matters; a single global shape does not.
 - **Group by the unit of work or decision, not just severity.** Severity orders urgency; it does not tell the actor what *kind* of action a finding needs. Surface the split: **decisions a human must make** (design calls, ambiguous semantics) vs **mechanical work that can just be done** (tests, dedup, concrete fixes) vs **informational** (residual risks) — an agent clears the mechanical work and must stop at decisions. Group findings sharing a root cause or one fix (the Triage Groups) and name the order/dependency ("decide X once -> resolves #1 and #7; do #1 first"); the unit of work is often a group, not a finding.
 - **Detail is earned by enabling the next action, not by demonstrating thoroughness.** Cover *every* finding — completeness is non-negotiable — but say each in the least that lets the consumer act. **Do not paste file contents or re-print the diff**; it is already in the repo/PR — cite `file:line` and spend words only on what the diff can't show (why it breaks, the fix, the repro). This governs *expression, never coverage*: never drop a finding or its why/fix to be shorter, and match weight to weight (a nit is one line; a P1 design call earns room).
@@ -694,10 +661,8 @@ Assemble the final report. **Default:** human-readable markdown. **`mode:agent`:
 5. **Actionable Findings.** Include when the actionable queue is non-empty — findings the caller should address (`gated_auto` / `manual` with `downstream-resolver`), plus anything Stage 5c chose not to apply. In default mode, findings already applied appear in the Applied section, not here.
 6. **Pre-existing.** Separate section, does not count toward verdict.
 7. **Learnings & Past Solutions.** Surface `learnings-researcher` local-prompt results: if past solutions are relevant, flag them as "Known Pattern" with links to docs/solutions/ files.
-8. **Agent-Native Gaps.** Surface `agent-native-reviewer` local-prompt results. Omit section if no gaps found.
-9. **Deployment Notes.** If the `deployment-verification-agent` local prompt ran, surface the key Go/No-Go items: blocking pre-deploy checks, the most important verification queries, rollback caveats, and monitoring focus areas. Keep the checklist actionable rather than dropping it into Coverage. Schema drift appears in the findings tables as `data-migration` P1 rows — do not add a separate Schema Drift section.
-10. **Coverage.** Applied count (when Stage 5c ran), suppressed count by anchor (e.g., "N findings suppressed at anchor 50, M at anchor 25"), mode-aware demotion count, validator drop count and reasons (when Stage 5b ran), any P0/P1 with degraded validation (kept on validator infra failure), validator over-budget drops (when the 15-cap fired), residual risks, testing gaps, failed/timed-out reviewers, and inferred-intent uncertainty when applicable. When the Stage 3c lite roster ran, state it and the reduced reviewer set (so the narrower coverage is visible). When the Stage 5b direct-verification shortcut skipped validators for anchor-100 findings, note how many were verified by quote rather than by an independent validator subagent. When the Stage 5 quote-the-line gate demoted any 75/100 finding for missing `first_evidence`, record that count. **Removable surface (only when deletion-oriented maintainability findings exist):** one line giving the approximate net lines/files those findings would remove if applied (e.g., "Removable surface: ~120 lines / 2 files across findings #4, #7"). This is a dead-weight signal, **not** a reduction target — never lower the bar for a finding or invent deletions to grow the number, and omit the line entirely when no finding proposes a deletion.
-11. **Verdict.** Ready to merge / Ready with fixes / Not ready. Fix order if applicable. When an `explicit` plan has unaddressed requirements or implementation units, the verdict must reflect it — a PR that's code-clean but missing planned requirements is "Not ready" unless the omission is intentional. When an `inferred` plan has unaddressed requirements or implementation units, note it in the verdict reasoning but do not block on it alone.
+8. **Coverage.** Applied count (when Stage 5c ran), suppressed count by anchor (e.g., "N findings suppressed at anchor 50, M at anchor 25"), mode-aware demotion count, validator drop count and reasons (when Stage 5b ran), any P0/P1 with degraded validation (kept on validator infra failure), validator over-budget drops (when the 15-cap fired), residual risks, testing gaps, failed/timed-out reviewers, and inferred-intent uncertainty when applicable. When the Stage 3c lite roster ran, state it and the reduced reviewer set (so the narrower coverage is visible). When the Stage 5b direct-verification shortcut skipped validators for anchor-100 findings, note how many were verified by quote rather than by an independent validator subagent. When the Stage 5 quote-the-line gate demoted any 75/100 finding for missing `first_evidence`, record that count. **Removable surface (only when deletion-oriented maintainability findings exist):** one line giving the approximate net lines/files those findings would remove if applied (e.g., "Removable surface: ~120 lines / 2 files across findings #4, #7"). This is a dead-weight signal, **not** a reduction target — never lower the bar for a finding or invent deletions to grow the number, and omit the line entirely when no finding proposes a deletion.
+9. **Verdict.** Ready to merge / Ready with fixes / Not ready. Fix order if applicable. When an `explicit` plan has unaddressed requirements or implementation units, the verdict must reflect it — a PR that's code-clean but missing planned requirements is "Not ready" unless the omission is intentional. When an `inferred` plan has unaddressed requirements or implementation units, note it in the verdict reasoning but do not block on it alone.
 
 Do not include time estimates.
 
@@ -724,15 +689,13 @@ Minimum shape:
   },
   "intent": "<2-3 line summary>",
   "intent_confidence": "explicit | inferred | uncertain",
-  "reviewers": ["correctness", "security"],
+  "reviewers": ["correctness", "reliability"],
   "findings": [],
   "actionable_findings": [],
   "triage_groups": [],
   "pre_existing_findings": [],
   "requirements_completeness": null,
   "learnings": [],
-  "agent_native_gaps": [],
-  "deployment_notes": [],
   "residual_risks": [],
   "testing_gaps": [],
   "coverage": {},
@@ -759,10 +722,6 @@ Before delivering the review, verify:
 4. **Line numbers are accurate.** Verify each cited line number against the file content. A finding pointing to the wrong line is worse than no finding.
 5. **Protected artifacts are respected.** Discard any findings that recommend deleting or gitignoring files in `docs/brainstorms/`, `docs/plans/`, or `docs/solutions/`.
 6. **Findings don't duplicate linter output.** Don't flag things the project's linter/formatter would catch (missing semicolons, wrong indentation). Focus on semantic issues.
-
-## Language-Aware Conditionals
-
-Stack-specific reviewers fire only when the diff touches runtime behavior they specialize in (async UI races, iOS/Swift lifecycle) — never mechanically from file extensions alone; the trigger is meaningful changed behavior in that stack's runtime domain. Structural quality (complexity deletion, 1k-line regressions, type-boundary leaks) lives in the always-on `maintainability-reviewer`; do not spawn extra reviewers for language conventions, philosophy, or "strict bar" passes.
 
 ## After Review
 
@@ -827,10 +786,10 @@ Every reference lives in this skill's directory and loads **on demand at the sta
 |-----------|---------|---------|
 | `references/repo-profile-cache.md` | Stage 2c | Shared repo-profile cache protocol |
 | `references/persona-catalog.md` | Stage 3 | Full per-persona selection criteria and spawn gates |
+| `references/frontend-review-checklist.md` | Stage 3 (frontend signal) | Frontend checks to fold into persona prompts when the diff touches React/TS/CSS/hooks/state |
 | `references/subagent-template.md` | Stage 4 | Dispatch shape for every persona subagent |
 | `references/diff-scope.md` | Stage 4 | Shared diff-scope rules passed to each subagent |
 | `references/findings-schema.json` | Stage 4 | JSON output contract passed to each subagent |
-| `references/cross-model-review.md` | Stage 4 (only when the cross-model adversarial pass runs) | Host attestation + provider candidate resolution + peer-CLI shell-out |
 | `references/action-class-rubric.md` | Action Routing (as needed) | Persona guidance for `autofix_class` |
 | `references/review-output-template.md` | Stage 6 | Canonical section skeleton for the report |
 

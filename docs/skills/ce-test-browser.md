@@ -232,7 +232,6 @@ Only when code review uses `mode:agent` (read-only). Interactive review may muta
 ## See Also
 
 - [`ce-code-review`](./ce-code-review.md) — can spawn this skill for browser-affecting PRs (use `mode:agent` for concurrent runs on the same checkout)
-- [`ce-test-xcode`](./ce-test-xcode.md) — sibling skill for iOS simulator testing
 - [`ce-commit-push-pr`](./ce-commit-push-pr.md) — can include user-supplied evidence or summarize validation in PR descriptions
 - [`ce-work`](./ce-work.md) — orchestrator that may invoke this skill during Phase 3 verification
 - [`ce-setup`](./ce-setup.md) — reports whether `agent-browser` is available and prints the install command when missing

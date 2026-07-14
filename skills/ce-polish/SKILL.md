@@ -87,7 +87,7 @@ This is the core loop. The user browses the feature and tells you what to improv
 - When the user asks to check something → use a browser-automation capability to screenshot or inspect the page; prefer `agent-browser` if it's installed, otherwise use whatever the host exposes
 - When the user says they're done → commit the fixes and stop
 
-No checklist. No envelope. Just conversation.
+No checklist. No envelope. Just conversation. For frontend React + TypeScript apps, read `references/frontend-polish-checklist.md` for structured polish criteria (accessibility, responsive, visual consistency, performance, React-specific inspection). It supplies what to look for; the conversation remains the method — do not turn it into a gate.
 
 ## References
 
@@ -103,6 +103,7 @@ Reference files (loaded on demand):
 - `references/dev-server-remix.md` — Remix dev-server defaults
 - `references/dev-server-sveltekit.md` — SvelteKit dev-server defaults
 - `references/dev-server-procfile.md` — Procfile-based dev-server defaults
+- `references/frontend-polish-checklist.md` — frontend polish criteria (accessibility, responsive, visual, performance, React)
 
 Scripts (invoked via `bash "$SKILL_DIR/scripts/<name>"` — see Phase 1 for `SKILL_DIR`):
 - `scripts/read-launch-json.sh` — launch.json reader

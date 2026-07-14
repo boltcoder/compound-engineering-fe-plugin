@@ -2,7 +2,7 @@
 
 > Discover strong, qualified directions worth exploring — across any domain — and let the rest fall away.
 
-`ce-ideate` is the upstream **discovery** skill. It's where you reach when you don't yet have a specific idea — when the question is "which directions even matter here?" rather than "let me refine the one I already have." It does the homework first (parallel grounding agents pull from your codebase, past learnings, **external prior art on the open web**, and optionally Slack and your issue tracker), generates candidates from six different conceptual frames, requires a tagged **basis** for every idea, and presents only the survivors of an adversarial critique — with explicit reasons for what was rejected.
+`ce-ideate` is the upstream **discovery** skill. It's where you reach when you don't yet have a specific idea — when the question is "which directions even matter here?" rather than "let me refine the one I already have." It does the homework first (parallel grounding agents pull from your codebase, past learnings, **external prior art on the open web**, and optionally your issue tracker), generates candidates from six different conceptual frames, requires a tagged **basis** for every idea, and presents only the survivors of an adversarial critique — with explicit reasons for what was rejected.
 
 It runs equally well on software topics, product topics, and entirely non-software topics — naming, narrative, personal decisions, weekend trips, business strategy. The same generate-critique-survive engine; the same basis requirement; the same anti-slop discipline.
 
@@ -44,7 +44,7 @@ Asking an AI "what's worth exploring here?" usually returns:
 
 `ce-ideate` separates **grounding**, **generation**, **critique**, and **selection** as discrete phases — and the quality mechanism is **explicit rejection with reasons**, not optimistic ranking.
 
-- Grounding agents do the homework first — codebase scan, past learnings, external prior art, optional Slack and issue intelligence
+- Grounding agents do the homework first — codebase scan, past learnings, external prior art, optional issue intelligence
 - The topic is decomposed into 3-5 orthogonal axes derived from grounding — *what aspects of the subject* sub-agents must cover, distinct from *how they think about it*
 - Six parallel ideation sub-agents work from different conceptual frames, each spreading ideas across the axes
 - Every idea must carry a tagged **basis** — direct evidence, named external prior art, or a written-out first-principles argument
@@ -58,7 +58,7 @@ Asking an AI "what's worth exploring here?" usually returns:
 
 ### 1. Comprehensive grounding before any idea is generated
 
-Every run starts with parallel grounding agents that supply the substance ideas will be qualified against — codebase scan (in repo mode), past institutional learnings from `docs/solutions/`, external prior art via web research, and optional Slack and issue intelligence when those tools are available. In repo mode, cheap **evidence scouts** then deepen the grounding: one per topic axis, each returning a dossier of verbatim quotes and `file:line` pointers, so ideation agents cite real code rather than a paraphrased summary. **External prior art is critical**: without it, the agent is just remixing what's already in your codebase or your head. With it, ideas can cite "this is how X solved this" — concrete, verifiable, named precedent. You can also hand the run your own research: point the prompt at a research artifact (a social-listening report, survey export, analytics dump) and a cheap agent distills it into a citable evidence dossier — enriching web research with source classes it doesn't reach, not replacing it.
+Every run starts with parallel grounding agents that supply the substance ideas will be qualified against — codebase scan (in repo mode), past institutional learnings from `docs/solutions/`, external prior art via web research, and optional issue intelligence when those tools are available. In repo mode, cheap **evidence scouts** then deepen the grounding: one per topic axis, each returning a dossier of verbatim quotes and `file:line` pointers, so ideation agents cite real code rather than a paraphrased summary. **External prior art is critical**: without it, the agent is just remixing what's already in your codebase or your head. With it, ideas can cite "this is how X solved this" — concrete, verifiable, named precedent. You can also hand the run your own research: point the prompt at a research artifact (a social-listening report, survey export, analytics dump) and a cheap agent distills it into a citable evidence dossier — enriching web research with source classes it doesn't reach, not replacing it.
 
 ### 2. Basis requirement — every idea cites its evidence
 
@@ -179,7 +179,7 @@ The deliverable is written automatically — you don't have to ask. If a run was
 | `top issue themes in <area>` | Triggers issue-tracker intent |
 | `output:md` | Write the artifact as markdown instead of the default self-contained HTML (`output:html` forces HTML explicitly). Also settable per-project via `ideate_output` in `.compound-engineering/config.local.yaml` |
 
-Skip phrases supported anywhere in the prompt: `no external research`, `no slack`.
+Skip phrases supported anywhere in the prompt: `no external research`.
 
 ---
 
@@ -208,4 +208,3 @@ A subject-identification gate asks one scope question when the prompt refers onl
 - [`ce-plan`](./ce-plan.md) — once requirements are clear, plan the implementation
 - [`ce-strategy`](./ce-strategy.md) — anchor ideation to a documented product strategy
 - [`ce-doc-review`](./ce-doc-review.md) — review the saved ideation artifact for clarity and completeness (markdown output only — run with `output:md` first)
-- [`ce-proof`](./ce-proof.md) — publish the artifact to Proof for a shareable link (markdown output only — Proof can't ingest HTML)

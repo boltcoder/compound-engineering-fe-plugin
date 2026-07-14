@@ -63,7 +63,7 @@ Then:
 - **Unselected decisions and hazards** — record the recommended default (or the hazard's constraint) as an explicit assumption, the same way rigor-probe uncertainty is recorded: in the Product Contract on the software route, in the synthesis on the universal route.
 - **"I want to actually learn this one"** — offer a handoff to the `ce-explain` skill for that item (offer, don't auto-fire); the brainstorm resumes when they return or continues with the default meanwhile.
 
-The pass never resolves decisions by itself and never replaces the dialogue. It runs once, converts blindspots into questions the user can answer, and the normal flow — rigor probes, approaches, synthesis — continues on informed ground.
+The pass never resolves decisions by itself and never replaces the dialogue. It runs once, converts blindspots into questions the user can answer, and the normal flow — approaches, synthesis — continues on informed ground.
 
 ## Universal route
 

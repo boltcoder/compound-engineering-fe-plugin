@@ -44,6 +44,6 @@ Use the shared anchored rubric (see `subagent-template.md` — Confidence rubric
 
 ## What you don't flag
 
-- Backend details, performance, security (security-lens), business strategy
+- Backend details, performance, security, business strategy
 - Database schema, code organization, technical architecture
 - Visual design preferences unless they indicate AI slop

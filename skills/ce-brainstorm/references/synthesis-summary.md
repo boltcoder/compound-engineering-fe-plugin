@@ -33,7 +33,7 @@ The scoping synthesis has up to four named sections, each **render-conditional**
 1. **What we're building** (always present) — 1–3 sentences. The shape that emerged from dialogue, forward-looking, plain words. Not a transcript of "you said X."
 2. **Key trade-offs** (conditional) — 1–3 bullets, each with a brief why. Render only when real trade-offs were made in dialogue.
 3. **What's not in scope** (conditional) — 1–3 bullets, or fold into a single sentence. Render only when deferred items would surprise a downstream reader if absent.
-4. **Call outs** (conditional) — 0–3 bullets. Residual forks the dialogue didn't resolve: post-dialogue consequences (combining user answers surfaced something they couldn't see during Q&A), silent agent inferences, or — in pre-loaded contexts with no dialogue — scope bets the user is seeing for the first time. **Not "questions the agent could have asked during Phase 1.3 but didn't"** — if a call-out reads like a missed dialogue question, Phase 1.3's integration check failed; flag the gap rather than padding the section.
+4. **Call outs** (conditional) — 0–3 bullets. Residual forks the dialogue didn't resolve: post-dialogue consequences (combining user answers surfaced something they couldn't see during Q&A), silent agent inferences, or — in pre-loaded contexts with no dialogue — scope bets the user is seeing for the first time. **Not "questions the agent could have asked during Phase 1.2 but didn't"** — if a call-out reads like a missed dialogue question, Phase 1.2's integration check failed; flag the gap rather than padding the section.
 
 Each section answers a different question:
 
@@ -46,7 +46,7 @@ Then the confirmation: *"Confirm and I'll write the requirements-only plan next,
 
 ### Path A vs Path B: the gate that fires the confirmation question
 
-Phase 2.5 has two presentation modes, gated by **two signals**: (1) did any blocking question fire before Phase 2.5? AND (2) what tier did Phase 0.3 classify the scope as? Blocking questions include Phase 0.3 scope disambiguation, Phase 1.3 collaborative dialogue probes, and Phase 2 approach selection (when a menu fires). Internal classification, Phase 1.1 scan, and Phase 1.2 pressure test are not blocking questions — they don't count.
+Phase 2.5 has two presentation modes, gated by **two signals**: (1) did any blocking question fire before Phase 2.5? AND (2) what tier did Phase 0.3 classify the scope as? Blocking questions include Phase 0.3 scope disambiguation, Phase 1.2 collaborative dialogue probes, and Phase 2 approach selection (when a menu fires). Internal classification and Phase 1.1 scan are not blocking questions — they don't count.
 
 - **Path A — no blocking questions fired AND tier is Lightweight**: announce-mode. Emit "What we're building" prose only (no other sections, no confirmation question), then proceed to Phase 3 doc-write in the same turn. Do NOT end the turn waiting for acknowledgment. The user can revise after the doc lands if the shape is wrong — Lightweight Path A docs are short, post-hoc revision is cheap.
 - **Path B — at least one blocking question fired, OR tier is Standard / Deep-feature / Deep-product**: full tier-aware scoping synthesis with confirmation gate. Two scenarios fire Path B: (a) the user invested answer-time during dialogue, or (b) the user pre-loaded substantive scope content (Phase 0.2 fast-path with a richly-specified opening prompt). Either way, the substance earns a real checkpoint. The confirmation question is unconditional even when zero call-outs survive the keep test.

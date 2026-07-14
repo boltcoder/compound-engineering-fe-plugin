@@ -4,7 +4,7 @@
 
 `ce-strategy` is the **upstream anchor** skill. It produces and maintains a single canonical document at the repo root (peer of `README.md`) that downstream skills read as grounding. The document is short and structured on purpose — good answers to a handful of sharp questions produce a better strategy than any amount of prose. This skill asks those questions, pushes back on weak answers, and writes the doc.
 
-The compound-engineering ideation chain is `/ce-ideate → /ce-brainstorm → /ce-plan → /ce-work`. `STRATEGY.md` sits **upstream of the chain** — `ce-ideate`, `ce-brainstorm`, and `ce-plan` all read it as grounding when it exists, weighting their suggestions toward the active tracks and stated approach. `ce-product-pulse` also reads it to seed the metrics that get measured.
+The compound-engineering ideation chain is `/ce-ideate → /ce-brainstorm → /ce-plan → /ce-work`. `STRATEGY.md` sits **upstream of the chain** — `ce-ideate`, `ce-brainstorm`, and `ce-plan` all read it as grounding when it exists, weighting their suggestions toward the active tracks and stated approach.
 
 ---
 
@@ -15,7 +15,7 @@ The compound-engineering ideation chain is `/ce-ideate → /ce-brainstorm → /c
 | What does it do? | Runs an interview with pushback rules, then writes/updates `STRATEGY.md` at the repo root |
 | When to use it | Starting a new product; updating direction; "what are we working on?"; before kicking off ideation if no strategy exists yet |
 | What it produces | `STRATEGY.md` with target problem, approach, persona, key metrics, tracks, optional milestones / non-goals / marketing |
-| What's next | `/ce-ideate`, `/ce-brainstorm`, `/ce-plan`, or `/ce-product-pulse` — all consult the doc as grounding |
+| What's next | `/ce-ideate`, `/ce-brainstorm`, `/ce-plan` — all consult the doc as grounding |
 
 ---
 
@@ -63,7 +63,6 @@ When `STRATEGY.md` exists at the repo root, downstream skills read it:
 - **`ce-ideate`** — codebase-scan grounding agent reads it; ideation weights toward strategy-aligned directions automatically
 - **`ce-brainstorm`** — Phase 1.1 constraint check reads it; product/scope decisions stay anchored to active tracks
 - **`ce-plan`** — repo-research-analyst reads it; plan flags decisions that pull away from active tracks or the stated approach
-- **`ce-product-pulse`** — first-run interview seeds product name and key metrics from the doc, then wires up data sources to actually measure those metrics
 
 The doc is a peer of `README.md` (canonical, well-known location at the repo root) so the skills find it predictably.
 
@@ -93,7 +92,7 @@ The skill checks for an existing `STRATEGY.md` (none found) and announces "Strat
 
 The interview proceeds through Who it's for, Key metrics, Tracks. Two rounds of pushback per section maximum. After all required sections are captured, the skill reads `references/strategy-template.md`, fills it in, presents the full draft in chat, offers one round of edits, then writes to `STRATEGY.md`.
 
-Phase 3 notes the doc is now in place and `ce-ideate`, `ce-brainstorm`, `ce-plan`, and `ce-product-pulse` will pick it up on their next run. Suggests `/ce-ideate` as a natural next step.
+Phase 3 notes the doc is now in place and `ce-ideate`, `ce-brainstorm`, and `ce-plan` will pick it up on their next run. Suggests `/ce-ideate` as a natural next step.
 
 ---
 
@@ -127,8 +126,6 @@ Skip `ce-strategy` when:
 ```
 
 The downstream skills don't *require* `STRATEGY.md` — they work without it. But when the doc exists, the active tracks and stated approach pull ideation, brainstorming, and planning toward strategy-aligned directions automatically. When `STRATEGY.md` is absent, `ce-ideate` can still ground in the codebase, but it has no signal about what *kind* of work matters most right now.
-
-`ce-product-pulse` similarly seeds its first-run interview from `STRATEGY.md`'s key metrics — wiring up data sources to measure what the strategy says matters.
 
 ---
 
@@ -206,4 +203,3 @@ The "Target problem / Our approach / Tracks" structure is informed by Richard Ru
 - [`ce-ideate`](./ce-ideate.md) — reads `STRATEGY.md` as grounding for ideation
 - [`ce-brainstorm`](./ce-brainstorm.md) — reads it for constraint awareness during scope work
 - [`ce-plan`](./ce-plan.md) — reads it; flags plan decisions that pull away from active tracks
-- [`ce-product-pulse`](./ce-product-pulse.md) — seeds first-run setup from the strategy's key metrics

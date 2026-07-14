@@ -35,7 +35,7 @@ Generalist code review prompts collapse in predictable ways:
 
 `ce-code-review` runs review as a structured pipeline with explicit gates:
 
-- **Diff-aware persona selection** — 4 always-on reviewers + 2 CE always-on agents, plus cross-cutting and stack-specific personas chosen for what the diff actually touches
+- **Diff-aware persona selection** — 4 always-on reviewers + 1 CE always-on agent, plus conditional personas chosen for what the diff actually touches
 - **Parallel persona dispatch** — each reviewer focuses on its lens; results return in parallel
 - **Bounded dispatch with backpressure** — learns/respects the current harness's active-subagent limit, queues remaining reviewers, and treats capacity errors as retryable backpressure instead of failed review
 - **Confidence-gated synthesis** — findings merge, dedupe, promote on cross-persona agreement, and route by autofix class
@@ -50,22 +50,12 @@ Generalist code review prompts collapse in predictable ways:
 
 ### 1. Diff-aware persona selection
 
-A small config change triggers 6 reviewers (the 4 always-on + 2 CE always-on). A Rails auth feature with migrations might trigger 10. The skill decides which personas fit the diff:
+A small config change triggers 5 reviewers (the 4 always-on + 1 CE always-on). A Rails auth feature might trigger 7 or 8. The skill decides which personas fit the diff:
 
-- **Always-on (every review)** — `correctness-reviewer`, `testing-reviewer`, `maintainability-reviewer`, `project-standards-reviewer`, `agent-native-reviewer`, `learnings-researcher`
-- **Cross-cutting conditional** — security, performance, API contract, data migrations, reliability, adversarial, previous-comments — each selected only when the diff touches its concern
-- **Stack-specific conditional** — Julik frontend races, Swift/iOS — only when the matching runtime domain is touched. Structural quality (complexity deletion, 1k-line regressions, spaghetti) lives in the always-on maintainability persona.
-- **CE conditional (migrations)** — `deployment-verification-agent` for risky migration diffs; schema drift and migration safety are handled by the `data-migration` persona
+- **Always-on (every review)** — `correctness-reviewer`, `testing-reviewer`, `maintainability-reviewer`, `project-standards-reviewer`, `learnings-researcher`
+- **Conditional** — performance, API contract, reliability, adversarial — each selected only when the diff touches its concern
 
-Persona selection is agent judgment, not keyword matching. Instruction-prose files (Markdown skills, JSON schemas) are product code but skip runtime-focused reviewers (adversarial, races) — they wouldn't apply. The exception is a **silent-pass verification mechanism** (a CI/CD gate, build/deploy step, coverage/lint gate, or test harness/mock that could mask production): even as a small config diff it gets the adversarial + cross-model lens, because its risk is fidelity — going green while the real thing is red — not blast radius.
-
-### 1b. Cross-model adversarial pass
-
-When adversarial is selected and the working tree is the reviewed head (`local-aligned` / standalone), the same adversarial brief also runs through **one different model provider than the host** in a separate read-only process. Agreement between the in-process `adversarial` persona and the peer (`adversarial-<provider>`) is the strongest promotion signal in synthesis.
-
-**Which provider runs the peer** is auto-chosen and overridable — the same independence system as `ce-doc-review`, scoped to the adversarial lens only (no security/correctness twins, no whole-diff peer). The skill attests the host provider solely to exclude it; un-attestable hosts skip rather than risk a same-provider peer. Preference order: conversation → `cross_model_peer:` in `.compound-engineering/config.local.yaml` → project instructions in context → first available of `codex → claude → grok → composer`. A second provider is opt-in only (`CROSS_MODEL_MAX_PEERS=2`). The peer reviews the current work tree against the diff base (in-tree read-only); reviewed code may egress to the selected provider. The pass is non-blocking — missing CLI / timeout / unparseable output never fails the review.
-
-This shares the provider/route kernel with `ce-doc-review` (parity-tested in CI) but keeps code-review's product scope: adversarial-only, diff/work-tree delivery, not doc-review's judgment trio or whole-doc sweep.
+Persona selection is agent judgment, not keyword matching. Instruction-prose files (Markdown skills, JSON schemas) are product code but skip runtime-focused reviewers (adversarial) — they wouldn't apply. The exception is a **silent-pass verification mechanism** (a CI/CD gate, build/deploy step, coverage/lint gate, or test harness/mock that could mask production): even as a small config diff it gets the adversarial lens, because its risk is fidelity — going green while the real thing is red — not blast radius.
 
 ### 2. Severity (P0-P3) and autofix class are orthogonal
 
@@ -125,9 +115,9 @@ You invoke `/ce-code-review` on a feature branch with a Rails auth change that i
 
 The skill detects you're on a feature branch (no PR yet), resolves the base from `origin/HEAD` (or PR metadata when an open PR exists), and computes the diff. Stage 2 reads commit messages and writes a 2-3 line intent summary. Stage 2b auto-discovers the plan in `docs/plans/` from the branch name, classifies readiness, and reads Product Contract Requirements plus implementation U-IDs when the artifact is implementation-ready.
 
-Stage 3 selects reviewers: the 6 always-on, plus security (auth touched), reliability (background job for token cleanup), data-migration (migration file present), and deployment-verification agent when the migration is risky. Seven or eight reviewers total, dispatched in parallel.
+Stage 3 selects reviewers: the 5 always-on, plus reliability (background job for token cleanup) and adversarial (auth surface is high-stakes). Seven reviewers total, dispatched in parallel.
 
-After all return, synthesis merges 23 raw findings into 14 distinct findings. Three are clean, reversible fixes (a typo, a rename, dead-code removal) the review applies and verifies itself (Stage 5c → Applied section). Six are `gated_auto` for the auth surface — concrete candidates the review applies, flagging them prominently as green-but-unverifiable (auth) for your review. Two are `manual` (deployment Go/No-Go checklist items). Three are `advisory` (FYI notes). Each finding has anchored evidence and a stable number.
+After all return, synthesis merges 23 raw findings into 14 distinct findings. Three are clean, reversible fixes (a typo, a rename, dead-code removal) the review applies and verifies itself (Stage 5c → Applied section). Six are `gated_auto` for the auth surface — concrete candidates the review applies, flagging them prominently as green-but-unverifiable (auth) for your review. Two are `manual` (rollout sequencing decisions). Three are `advisory` (FYI notes). Each finding has anchored evidence and a stable number.
 
 You walk through the 6 gated findings, apply 4, defer 1 to follow-up via the tracker, and decline 1 with a cited harm. Final validation runs; the report is saved.
 
@@ -200,16 +190,13 @@ Conflicting mode flags (or conflicting grouping flags) stop execution with an er
 Use it when it's the right tool — the quick-review short-circuit defers to it explicitly. `ce-code-review` is for cases where you want diff-aware persona selection, structured findings with calibrated severity, autofix routing, and residual work handling. It's the heavier tool; reach for it when the work warrants.
 
 **How does it decide which personas to dispatch?**
-Agent judgment over the actual diff — not keyword matching. The 4 always-on + 2 CE always-on personas run for every review. Cross-cutting and stack-specific personas are added when their concern is touched (e.g., security if auth files changed; `data-migration-reviewer` when migration or schema dump files are present). Instruction-prose files skip runtime-focused reviewers (adversarial, races) — except a silent-pass verification mechanism (CI/CD gate, build/deploy step, coverage/lint gate, test harness/mock), which gets adversarial + the cross-model pass regardless of size.
+Agent judgment over the actual diff — not keyword matching. The 4 always-on + 1 CE always-on personas run for every review. Conditional personas are added when their concern is touched (e.g., reliability if a background job changed). Instruction-prose files skip runtime-focused reviewers (adversarial) — except a silent-pass verification mechanism (CI/CD gate, build/deploy step, coverage/lint gate, test harness/mock), which gets the adversarial pass regardless of size.
 
 **What's the difference between interactive (default) and `mode:agent`?**
 Interactive is the human-facing mode: a markdown report, and the review applies the safe, verified fixes itself (an Applied section) and commits them when your tree is clean (leaving them for your commit if it was dirty); it never pushes. `mode:agent` is the machine handoff: one JSON object, report-only — the review mutates nothing and the caller (e.g. `/ce-work`) applies findings on its own terms. `mode:headless` is a deprecated alias for `mode:agent`.
 
 **What's the Residual Work Gate?**
 A caller-owned step (not part of the review skill): in `mode:agent`, the caller (typically `/ce-work`) applies what it can, then presents the findings it didn't apply and asks the user: apply now, file tickets, accept with durable sink, or stop. "Accept" requires a real durable record (Known Residuals in PR description, or `docs/residual-review-findings/<sha>.md`) — findings can't disappear into chat.
-
-**What's the difference between this and `ce-doc-review`'s cross-model pass?**
-Same independence *system* (host attestation, multi-provider selection, read-only peer CLI, fold-in as `<lens>-<provider>`, agreement promotion). Different *lens policy*: code-review runs **adversarial only**; doc-review runs a judgment trio plus a whole-doc sweep because document judgment is spread across more lenses. Code-review peers review the work tree/diff in-place; doc-review embeds the document into a more isolated scratch.
 
 **Why does it never switch the checkout?**
 The skill never runs `git checkout`/`switch` — passing a PR/branch selects review *scope*, not permission to mutate the tree (it diffs remote/local refs without checking out). Interactive mode may *apply* fixes to the current checkout (a reversible edit), but it never switches branches. To review the current checkout against a different ref, pass `base:<ref>`.

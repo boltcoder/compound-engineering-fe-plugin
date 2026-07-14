@@ -263,6 +263,10 @@ Filter the output against the scope paths. If any in-scope files have uncommitte
 
 ### 1.2 Build or Validate Measurement Harness
 
+For frontend optimization targets (Web Vitals, bundle size, render performance, INP), read this for measurement harnesses, experiment patterns, degenerate gates, and the performance audit checklist:
+
+`references/frontend-optimization-examples.md`
+
 **If user provides a measurement harness** (the `measurement.command` already exists):
 1. Run it once via the measurement script:
    ```bash
