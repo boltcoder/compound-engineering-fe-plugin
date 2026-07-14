@@ -221,4 +221,3 @@ The personas are tuned for those two types specifically. Reviewing a learning do
 - [`ce-brainstorm`](./ce-brainstorm.md) — produces requirements-only unified plans whose Product Contract this skill reviews
 - [`ce-plan`](./ce-plan.md) — produces the plan docs this skill reviews; invokes this skill at Phase 5.3.8
 - [`ce-code-review`](./ce-code-review.md) — sibling skill for code (diffs); same multi-persona pattern, different artifact
-- [`ce-proof`](./ce-proof.md) — publish a doc to Every's collaborative editor for human review and sharing; complementary, not a substitute

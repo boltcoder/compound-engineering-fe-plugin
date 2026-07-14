@@ -81,7 +81,6 @@ Detect destinations by capability — probe the agent's own toolset and session 
 
 - **Artifact surface** (offered when an artifact-publishing tool is present in the current session's tools) — publish per `references/destinations.md`: re-emit the explainer as body-only markup (no doctype/html/head/body, styles inline, no external font links); the surface wraps content in its own skeleton and blocks external hosts.
 - **Local file** — copy the artifact out of `$RUN_DIR` to the path the user names, then where the platform exposes a browser-opening primitive (`open` on macOS, `xdg-open` on Linux, `start` on Windows) offer to open it; otherwise print the absolute path.
-- **Publish to Proof** (markdown output only) — publish per `references/destinations.md` and surface the returned share URL; on failure retry once, then report and move on.
 - **Send to Thinkroom** (offered only when a Thinkroom skill or CLI capability is detected) — send per `references/destinations.md`.
 - **Leave it** — report the `$RUN_DIR` path and state it is a temporary location that does not survive reboot; nothing else is written.
 

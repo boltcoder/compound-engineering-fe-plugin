@@ -154,7 +154,7 @@ The pairing matters: `ce-compound` adds new docs; `ce-compound-refresh` ensures 
 
 The skill is invoked directly with a scope hint that narrows the review:
 
-- **Specific file** — `/ce-compound-refresh plugin-versioning-requirements`
+- **Specific file** — `/ce-compound-refresh agent-friendly-cli-principles`
 - **Module/component** — `/ce-compound-refresh payments`
 - **Category** — `/ce-compound-refresh performance-issues`
 - **Pattern topic** — `/ce-compound-refresh critical-patterns`
@@ -171,7 +171,7 @@ Without a scope hint, the skill discovers the candidate set, does broad-scope tr
 |----------|--------|
 | _(empty)_ | Broad sweep with triage; recommends a starting cluster |
 | `<directory>` | e.g., `performance-issues` — narrows by category |
-| `<filename slug>` | e.g., `plugin-versioning-requirements` — narrows by file |
+| `<filename slug>` | e.g., `agent-friendly-cli-principles` — narrows by file |
 | `<module/keyword>` | e.g., `auth`, `payments` — narrows by content/frontmatter |
 | `mode:autofix` | Append to any of the above; runs without user interaction, applies all unambiguous actions, marks ambiguous as stale |
 

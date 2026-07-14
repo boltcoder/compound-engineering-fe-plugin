@@ -49,8 +49,6 @@ Skills that anchor, feed, or maintain the loop without being steps inside it.
 | Skill | Description |
 |-------|-------------|
 | [`/ce-strategy`](./ce-strategy.md) | Create or maintain `STRATEGY.md` — the upstream anchor read by `ce-ideate`, `ce-brainstorm`, and `ce-plan` as grounding |
-| [`/ce-product-pulse`](./ce-product-pulse.md) | Outer feedback loop — single-page time-windowed report on usage, performance, errors, followups; saved to `docs/pulse-reports/` as a timeline |
-| [`/ce-sweep`](./ce-sweep.md) | Recurring feedback sweep — ingest Slack/GitHub items (email experimental) since per-source cursors, acknowledge at source, analyze recordings, verify fixes merged, and reconcile an `/lfg`-ready rolling plan |
 | [`/ce-compound-refresh`](./ce-compound-refresh.md) | Maintain `docs/solutions/` over time — five outcomes (Keep / Update / Consolidate / Replace / Delete), Interactive + Autofix modes |
 
 ---
@@ -75,7 +73,6 @@ Invoked when a specific need arises — not part of any chain.
 
 | Skill | Description |
 |-------|-------------|
-| [`/ce-riffrec-feedback-analysis`](./ce-riffrec-feedback-analysis.md) | Turn raw [Riffrec](https://github.com/kieranklaassen/riffrec) recordings into structured feedback — quick bug or extensive analysis with `ce-brainstorm` handoff |
 
 ---
 
@@ -110,7 +107,6 @@ Invoked when a specific need arises — not part of any chain.
 
 | Skill | Description |
 |-------|-------------|
-| [`/ce-proof`](./ce-proof.md) | Publish, view, comment on, and edit markdown via [Proof](https://www.proofeditor.ai), Every's collaborative editor — hosted v3 web API with owner credential lifecycle |
 
 ---
 
@@ -118,11 +114,9 @@ Invoked when a specific need arises — not part of any chain.
 
 | Skill | Description |
 |-------|-------------|
-| [`/ce-promote`](./ce-promote.md) | Draft user-facing announcement copy for a shipped feature (X, changelog, LinkedIn, email) — voice-matched via the optional Spiral CLI, a lite layer of editorial & social expertise without it, drafts only |
 | [`/ce-resolve-pr-feedback`](./ce-resolve-pr-feedback.md) | Evaluate, fix, and reply to PR review feedback in parallel — including nitpicks |
 | [`/ce-dogfood`](./ce-dogfood.md) | Hands-off diff-scoped browser QA of the active branch — maps flows, autonomously fixes small breakages with regression tests and commits, writes a durable report (manual invocation only) |
 | [`/ce-test-browser`](./ce-test-browser.md) | End-to-end browser tests using a host-native browser with `agent-browser` fallback |
-| [`/ce-test-xcode`](./ce-test-xcode.md) | Build and test iOS apps on simulator using XcodeBuildMCP — screenshots, logs, human verification |
 | [`/ce-setup`](./ce-setup.md) | Diagnose optional tool capabilities and bootstrap safe project-local config |
 
 ---

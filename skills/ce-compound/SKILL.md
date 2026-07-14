@@ -410,7 +410,7 @@ When invoking or recommending `ce-compound-refresh`, be explicit about the argum
 
 Examples:
 
-- `/ce-compound-refresh plugin-versioning-requirements`
+- `/ce-compound-refresh agent-friendly-cli-principles`
 - `/ce-compound-refresh payments`
 - `/ce-compound-refresh performance-issues`
 - `/ce-compound-refresh critical-patterns`

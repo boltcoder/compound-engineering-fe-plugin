@@ -18,7 +18,6 @@ applies_when:
   - Changing persona confidence calibration in the doc-review skill-local personas under `skills/ce-doc-review/references/personas/`
   - Modifying the synthesis pipeline in `skills/ce-doc-review/references/synthesis-and-presentation.md`
   - Adjusting the subagent template's output contract in `references/subagent-template.md`
-  - Adding or modifying seeded test fixtures under `tests/fixtures/ce-doc-review/`
   - Debugging why a finding landed in a different tier than expected
 ---
 
@@ -106,5 +105,4 @@ Across 7+ runs on the rename fixture, the same document produced user-engagement
 - `skills/ce-doc-review/references/synthesis-and-presentation.md` — canonical synthesis pipeline spec, including 3.5c premise-dependency chain linking
 - `skills/ce-doc-review/references/subagent-template.md` — output contract with schema conformance block and advisory routing rule
 - `skills/ce-doc-review/references/personas/` — the 7 doc-review persona prompts (`coherence-reviewer.md`, `feasibility-reviewer.md`, `design-lens-reviewer.md`, `security-lens-reviewer.md`, `scope-guardian-reviewer.md`, `product-lens-reviewer.md`, `adversarial-document-reviewer.md`) with their confidence calibration bands
-- `tests/fixtures/ce-doc-review/` — three seeded fixtures (rename, auth, feature) for manual calibration testing; see each fixture's header comment for its specific seed map
-- `docs/solutions/developer-experience/branch-based-plugin-install-and-testing.md` — how to run the skill from a branch checkout for testing
+
