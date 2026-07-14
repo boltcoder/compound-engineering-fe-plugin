@@ -80,38 +80,11 @@ Pass the classification result to each persona via the `{document_type}` slot in
 
 Analyze the document content to determine which conditional personas to activate. Check for these signals:
 
-**product-lens** -- activate when the document makes challengeable claims about what to build and why, or when the proposed work carries strategic weight beyond the immediate problem. The system's users may be end users, developers, operators, maintainers, or any other audience -- the criteria are domain-agnostic. Check for either leg:
-
-*Leg 1 — Premise claims:* The document stakes a position on what to build or why that a knowledgeable stakeholder could reasonably challenge -- not merely describing a task or restating known requirements:
-- Problem framing where the stated need is non-obvious or debatable, not self-evident from existing context
-- Solution selection where alternatives plausibly exist (implicit or explicit)
-- Prioritization decisions that explicitly rank what gets built vs deferred
-- Goal statements that predict specific user outcomes, not just restate constraints or describe deliverables
-
-*Leg 2 — Strategic weight:* The proposed work could affect system trajectory, user perception, or competitive positioning, even if the premise is sound:
-- Changes that shape how the system is perceived or what it becomes known for
-- Complexity or simplicity bets that affect adoption, onboarding, or cognitive load
-- Work that opens or closes future directions (path dependencies, architectural commitments)
-- Opportunity cost implications -- building this means not building something else
-
 **design-lens** -- activate when the document contains:
 - UI/UX references, frontend components, or visual design language
 - User flows, wireframes, screen/page/view mentions
 - Interaction descriptions (forms, buttons, navigation, modals)
 - References to responsive behavior or accessibility
-
-**security-lens** -- activate when the document contains:
-- Auth/authorization mentions, login flows, session management
-- API endpoints exposed to external clients
-- Data handling, PII, payments, tokens, credentials, encryption
-- Third-party integrations with trust boundary implications
-
-**scope-guardian** -- activate when the document contains:
-- Multiple priority tiers (P0/P1/P2, must-have/should-have/nice-to-have)
-- Large requirement count (>8 distinct requirements or implementation units)
-- Stretch goals, nice-to-haves, or "future work" sections
-- Scope boundary language that seems misaligned with stated goals
-- Goals that don't clearly connect to requirements
 
 **adversarial** -- activate when the document contains a high-value challenge surface, not merely structural complexity. Routine plans with stated rationale are not by themselves an adversarial signal — premise/assumption work re-litigates settled questions when the only signal is "this plan is well-structured." Activate when ANY of the following holds:
 
@@ -134,8 +107,8 @@ Tell the user which personas will review and why. For conditional personas, incl
 Reviewing with:
 - coherence-reviewer (always-on)
 - feasibility-reviewer (always-on)
-- scope-guardian-reviewer -- plan has 12 requirements across 3 priority levels
-- security-lens-reviewer -- plan adds API endpoints with auth flow
+- design-lens-reviewer -- plan includes UI component redesign with accessibility notes
+- adversarial-document-reviewer -- plan proposes a new state management pattern
 ```
 
 ### Build Agent List
@@ -145,10 +118,7 @@ Always include:
 - `feasibility-reviewer`
 
 Add activated conditional personas:
-- `product-lens-reviewer`
 - `design-lens-reviewer`
-- `security-lens-reviewer`
-- `scope-guardian-reviewer`
 - `adversarial-document-reviewer`
 
 ### Dispatch
@@ -160,8 +130,8 @@ For each selected reviewer, read the matching skill-local prompt asset at `refer
 **Model tiering lives here, not in prompt assets.** Local prompt files have no frontmatter and carry no model metadata. Apply these dispatch-time preferences when the platform exposes a known model override; otherwise omit the override and inherit the parent model rather than guessing a platform-specific model name:
 
 - `coherence-reviewer`: cheapest capable extraction/reasoning tier.
-- `design-lens-reviewer`, `scope-guardian-reviewer`: platform mid-tier model.
-- `security-lens-reviewer`, `feasibility-reviewer`, `product-lens-reviewer`, `adversarial-document-reviewer`: inherit the parent model unless the harness has an established high-capability review tier.
+- `design-lens-reviewer`: platform mid-tier model.
+- `feasibility-reviewer`, `adversarial-document-reviewer`: inherit the parent model unless the harness has an established high-capability review tier.
 
 Each subagent receives the prompt built from the subagent template included below with these variables filled:
 
@@ -171,8 +141,8 @@ Each subagent receives the prompt built from the subagent template included belo
 | `{schema}` | Content of the findings schema included below |
 | `{document_type}` | "requirements", "plan", "unified-requirements", or "unified-plan" from Phase 1 classification |
 | `{document_path}` | Path to the document |
-| `{origin_path}` | Upstream Product Contract provenance extracted once during Phase 1: prefer the document's `origin:` frontmatter field when present; otherwise use `product_contract_source:<value>` when present; otherwise use `none`. Personas that adapt on origin/provenance (product-lens, adversarial, scope-guardian) read this slot to gate technique suppression — they do NOT re-parse frontmatter themselves. |
-| `{document_content}` | Reviewer-specific section slice. For unified artifacts, pass metadata, Goal Capsule, and only the relevant slice: product-lens/adversarial/scope reviewers get Product Contract; feasibility/coherence reviewers also get Planning Contract and active Implementation Units/Verification/DoD when `artifact_readiness: implementation-ready`. For legacy documents, pass the full document. |
+| `{origin_path}` | Upstream Product Contract provenance extracted once during Phase 1: prefer the document's `origin:` frontmatter field when present; otherwise use `product_contract_source:<value>` when present; otherwise use `none`. Personas that adapt on origin/provenance (adversarial) read this slot to gate technique suppression — they do NOT re-parse frontmatter themselves. |
+| `{document_content}` | Reviewer-specific section slice. For unified artifacts, pass metadata, Goal Capsule, and only the relevant slice: adversarial gets Product Contract; feasibility/coherence reviewers also get Planning Contract and active Implementation Units/Verification/DoD when `artifact_readiness: implementation-ready`. For legacy documents, pass the full document. |
 | `{decision_primer}` | Cumulative prior-round decisions in the current session, or an empty `<prior-decisions>` block on round 1. See "Decision primer" below. |
 
 For legacy requirements/plan documents, pass each subagent the **full
@@ -221,15 +191,11 @@ Cross-session persistence is out of scope. A later review of the same document s
 
 **Error handling:** If a subagent fails or times out, proceed with findings from subagents that completed. Note the failed reviewer in the Coverage section. Do not block the entire review on a single reviewer failure.
 
-**Dispatch limit:** Even at maximum (7 agents), use bounded parallel dispatch. If the harness cap is lower than the selected team size, queue the remainder and launch them as active reviewers complete.
-
-### Cross-Model Judgment Pass
-
-If any of the **conditional judgment trio** — `adversarial-document-reviewer`, `product-lens-reviewer`, `security-lens-reviewer` — was activated for this document, also run each activated one through **one different model provider than the host** in a separate read-only, least-privilege process. Load `references/cross-model-review.md` and follow it. You must do two things only you can — the script cannot see your conversation or system prompt: (1) **attest the host provider** from your own harness (Claude Code → `claude`; Codex → `codex`; Cursor → its active serving provider; un-attestable → skip the pass entirely, never guess) so it can be excluded and the pass never self-reviews; (2) **resolve the peer preference** (conversation > `.compound-engineering/config.local.yaml` `cross_model_peer:` > a preference already in your active project instructions > default order `codex→claude→grok→composer`) and front-load it into a comma-separated candidate list. **Resolve one peer for the whole document review first**, then **front-load that provider ahead of the full candidate order** (e.g. `codex,claude,grok,composer` when you resolve to codex) so concurrent lens calls share one peer while the trailing order preserves the cross-provider fallback if the resolved provider is installed-but-unauthed. Pass the attested `host_provider` and that candidate list to the script — it owns availability probing, the grok-CLI→cursor-agent fallback, host exclusion, and the one-model-per-provider-at-high-reasoning mapping. Run one bundled-script call per activated trio lens (each a background CLI shell-out that does not consume the subagent concurrency budget) in the **same dispatch wave** as the in-process persona reviewers so runtime overlaps, then **await every script exit before synthesis** (do not orphan background launches); each writes a `findings-schema.json`-shaped `<reviewer-name>-<provider>.json` return only after normalize. **Slice trio peers to match their twin:** for unified artifacts, pass each trio lens the *same reviewer-specific slice its in-process twin got* (the `{document_content}` slice you already computed — e.g. product-lens/adversarial get the Product Contract), not the full document, so the peer is a true corroborating twin rather than an off-lens reviewer — write that slice to a temp file and pass it as `<document-path>` (the script embeds whatever path it is given). **Also run one whole-document sweep:** in the same wave, launch one additional call with reviewer-name `whole-doc`, the **full** document (never sliced), and the same resolved provider — a broad different-model read of the entire doc that catches blind spots across every section, folding in as `whole-doc-<provider>` (KTD6 / R20). It runs **once per document** (not per lens), obeys the same gate, isolation, and never-`safe_auto` rules, and — having no in-process twin — corroborates by dedup fingerprint against *any* in-process finding. A second provider is opt-in only (`CROSS_MODEL_MAX_PEERS=2`). The pass is **non-blocking**: skip silently when the host is un-attestable, no different provider is reachable, the lens didn't activate, or it errors/times out. Announce per that reference's rules — on interactive hosts in default mode, a prominent line that frames it as an **independent cross-model review**, names the concrete **model + reasoning** (and, for a cursor-agent route, the route so Grok-via-cursor-agent vs Composer vs Grok-via-grok-CLI is unambiguous), names the document-content egress **scope** (the front-loaded provider can fail at runtime and fall through, so name that the doc goes to whichever candidate actually runs and reconcile the actual provider from the fold-in filename afterward); silent in headless mode (the script still emits a stderr audit log of the cross-model document egress). Feasibility and the convergent lenses (coherence, scope-guardian) do **not** run cross-model.
+**Dispatch limit:** Even at maximum (5 agents), use bounded parallel dispatch. If the harness cap is lower than the selected team size, queue the remainder and launch them as active reviewers complete.
 
 ## Phases 3-5: Synthesis, Presentation, and Next Action
 
-After all dispatched agents return — **including any cross-model `<reviewer-name>-<provider>.json` returns**, which enter synthesis as independent reviewer returns exactly like a persona artifact — read `references/synthesis-and-presentation.md` for the synthesis pipeline (validate, anchor-based gate, dedup, cross-persona agreement promotion — where a cross-model return agreeing with its in-process twin is the strongest signal, resolve contradictions, auto-promotion, route by three tiers with FYI subsection), `safe_auto` fix application, headless-envelope output, and the handoff to the routing question.
+After all dispatched agents return, read `references/synthesis-and-presentation.md` for the synthesis pipeline (validate, anchor-based gate, dedup, cross-persona agreement promotion, resolve contradictions, auto-promotion, route by three tiers with FYI subsection), `safe_auto` fix application, headless-envelope output, and the handoff to the routing question.
 
 For the four-option routing question and per-finding walk-through (interactive mode), read `references/walkthrough.md`. For the bulk-action preview used by best-judgment routing, Append-to-Open-Questions, and walk-through `Auto-resolve with best judgment on the rest`, read `references/bulk-preview.md`. Do not load these files before agent dispatch completes.
 

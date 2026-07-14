@@ -19,9 +19,9 @@ This template describes the Phase 4 interactive presentation — what the user s
 
 **Document:** docs/plans/2026-03-15-feat-user-auth-plan.md
 **Type:** plan
-**Reviewers:** coherence, feasibility, security-lens, scope-guardian
-- security-lens -- plan adds public API endpoint with auth flow
-- scope-guardian -- plan has 15 requirements across 3 priority levels
+**Reviewers:** coherence, feasibility, design-lens, adversarial
+- design-lens -- plan adds a new user-facing dashboard without interaction states
+- adversarial -- plan's success criteria don't tie to the stated goal
 
 Applied 5 fixes. 4 items need attention (2 errors, 2 omissions). 2 FYI observations.
 
@@ -31,7 +31,7 @@ Applied 5 fixes. 4 items need attention (2 errors, 2 omissions). 2 FYI observati
 - Fixed cross-reference: Section 4 referenced "Section 3.2" which is actually "Section 3.1" (coherence)
 - Updated unit count from "6 units" to "7 units" to match listed units (coherence)
 - Added "update API rate-limit config" step to Unit 4 -- implied by Unit 3's rate-limit introduction (feasibility)
-- Added auth token refresh to test scenarios -- required by Unit 2's token expiry handling (security-lens)
+- Added empty-state handling to Unit 4 -- required by Unit 2's feature introduction (design-lens)
 
 ### P0 — Must Fix
 
@@ -47,7 +47,7 @@ Applied 5 fixes. 4 items need attention (2 errors, 2 omissions). 2 FYI observati
 
 | # | Section | Issue | Reviewer | Confidence | Tier |
 |---|---------|-------|----------|------------|------|
-| 2 | Scope Boundaries | 8 of 12 units build admin infrastructure; only 2 touch stated goal | scope-guardian | 75 | manual |
+| 2 | Problem Frame | Success criteria pass even if the stated goal remains unsolved | adversarial | 75 | manual |
 
 #### Omissions
 
@@ -61,7 +61,7 @@ Applied 5 fixes. 4 items need attention (2 errors, 2 omissions). 2 FYI observati
 
 | # | Section | Issue | Reviewer | Confidence | Tier |
 |---|---------|-------|----------|------------|------|
-| 4 | API Design | Public webhook endpoint has no rate limiting mentioned | security-lens | 75 | gated_auto |
+| 4 | Implementation Unit 3 | Dashboard lists filterable columns but no loading/empty states specified | design-lens | 75 | gated_auto |
 
 ### FYI Observations
 
@@ -70,7 +70,7 @@ Low-confidence observations surfaced without requiring a decision. Content advis
 | # | Section | Observation | Reviewer | Confidence |
 |---|---------|-------------|----------|------------|
 | 1 | Naming | Filename `plan.md` is asymmetric with command name `user-auth`; could go either way | coherence | 50 |
-| 2 | Risk Analysis | Rollout-cadence decision may benefit from monitoring thresholds, though not blocking | scope-guardian | 50 |
+| 2 | Success Criteria | "Improved UX" metric has no baseline or measurement method defined | adversarial | 50 |
 
 ### Residual Concerns
 
@@ -84,7 +84,7 @@ Residual concerns are issues the reviewers noticed but could not confirm at conf
 
 | # | Question | Source |
 |---|---------|--------|
-| 1 | Should the API use versioned endpoints from launch? | feasibility, security-lens |
+| 1 | Should the dashboard ship behind a feature flag for gradual rollout? | feasibility, design-lens |
 
 ### Coverage
 
@@ -92,10 +92,9 @@ Residual concerns are issues the reviewers noticed but could not confirm at conf
 |---------|--------|----------|------|----------|-----------|-----|----------|
 | coherence | completed | 5 | 3 | 0 | 1 | 1 | 0 |
 | feasibility | completed | 3 | 1 | 1 | 0 | 0 | 1 |
-| security-lens | completed | 2 | 1 | 1 | 0 | 0 | 0 |
-| scope-guardian | completed | 2 | 0 | 0 | 1 | 1 | 0 |
-| product-lens | not activated | -- | -- | -- | -- | -- | -- |
-| design-lens | not activated | -- | -- | -- | -- | -- | -- |
+| design-lens | completed | 2 | 1 | 1 | 0 | 0 | 0 |
+| adversarial | completed | 2 | 0 | 0 | 1 | 1 | 0 |
+| whole-doc | not activated | -- | -- | -- | -- | -- | -- |
 
 Dropped: 3 (anchors 0/25 suppressed)
 Chains: 1 root with 2 dependents

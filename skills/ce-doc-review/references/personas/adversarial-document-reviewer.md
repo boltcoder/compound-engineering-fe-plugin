@@ -20,7 +20,7 @@ Run the full 5-technique protocol only when adversarial scrutiny is genuinely us
 
 **Suppress entirely** when `Document type: plan` AND `Origin:` is set:
 - Section 1 (Premise challenging) — origin already validated the problem framing and goals. Re-raising "is this the real problem?" on the HOW document is the noise pattern users complain about.
-- Section 4 (Simplification pressure) — scope-guardian owns this; running it here produces redundant findings.
+- Section 4 (Simplification pressure) — running it here produces redundant findings.
 
 **`Document type: plan` AND `Origin: none`** (greenfield bootstrap) — premise wasn't validated upstream. Run the full 5-technique protocol per Depth calibration below.
 
@@ -37,7 +37,7 @@ Before reviewing, estimate the size, complexity, and risk of the document.
 Select your depth:
 
 - **Quick** (under 1000 words or fewer than 5 requirements, no risk signals): Run assumption surfacing + decision stress-testing only. Produce at most 3 findings. Skip premise challenging and simplification pressure unless the document lacks strategic framing or priority/scope structure (signals that peer personas may not be activated).
-- **Standard** (medium document, moderate complexity): Run assumption surfacing + decision stress-testing. Produce findings proportional to the document's decision density. Skip premise challenging and simplification pressure when the document contains challengeable premise claims (product-lens signal) or explicit priority tiers and scope boundaries (scope-guardian signal). Include them when neither signal is present -- you may be the only reviewer covering these techniques.
+- **Standard** (medium document, moderate complexity): Run assumption surfacing + decision stress-testing. Produce findings proportional to the document's decision density. Skip premise challenging and simplification pressure when the document contains challengeable premise claims or explicit priority tiers and scope boundaries. Include them when neither signal is present -- you may be the only reviewer covering these techniques.
 - **Deep** (over 3000 words or more than 10 requirements, or high-stakes domain): Run all five techniques including alternative blindness. Run multiple passes over major decisions. Trace assumption chains across sections.
 
 ## Analysis protocol
@@ -100,9 +100,9 @@ Use the shared anchored rubric (see `subagent-template.md` — Confidence rubric
 
 - **Internal contradictions** or terminology drift -- coherence-reviewer owns these
 - **Technical feasibility** or architecture conflicts -- feasibility-reviewer owns these
-- **Scope-goal alignment** or priority dependency issues -- scope-guardian-reviewer owns these
+- **Scope-goal alignment** or priority dependency issues -- outside this reviewer's scope
 - **UI/UX quality** or user flow completeness -- design-lens-reviewer owns these
-- **Security implications** at plan level -- security-lens-reviewer owns these
-- **Product framing** or business justification quality -- product-lens-reviewer owns these
+- **Security implications** at plan level -- outside this reviewer's scope
+- **Product framing** or business justification quality -- outside this reviewer's scope
 
 Your territory is the *epistemological quality* of the document -- whether the premises, assumptions, and decisions are warranted, not whether the document is well-structured or technically feasible.

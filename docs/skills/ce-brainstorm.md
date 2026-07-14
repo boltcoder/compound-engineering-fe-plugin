@@ -70,7 +70,7 @@ Stacking three questions in one message produces diluted answers. `ce-brainstorm
 
 Not every brainstorm is the same. Lightweight covers small, well-bounded ideas with low ambiguity. Standard handles normal features with some decisions. Deep adds systemic-move probes for cross-cutting work. Deep-product additionally requires establishing product shape — actors, core outcome, positioning, durability — rather than inheriting it. Ceremony scales with the work, not against it.
 
-### 3. The Product Pressure Test — named gap lenses
+### 3. Named gap lenses
 
 Before generating approaches, the skill scans the user's opening for rigor gaps. Each gap has a name and probes the kind of confusion it catches:
 
@@ -192,7 +192,7 @@ The Phase 4 handoff offers planning, agent doc review, publish to Proof, direct-
 |----------|--------|
 | _(empty)_ | Asks for the feature description |
 | `<feature idea>` | Open-ended brainstorm |
-| `<problem>` | Routes via the product pressure test |
+| `<problem>` | Routes via the named gap lenses |
 | Existing requirements-only plan path, legacy `*-requirements.md` path, or topic | Resume offer |
 | `output:html` | Write the requirements-only unified plan as a single self-contained HTML file instead of markdown. Exclusive — the artifact is `.md` OR `.html`, never both. Default is markdown. Set `brainstorm_output: html` in `.compound-engineering/config.local.yaml` to make HTML the default. Pipeline mode (LFG, `disable-model-invocation`) always forces markdown so downstream automation gets a stable text shape. |
 

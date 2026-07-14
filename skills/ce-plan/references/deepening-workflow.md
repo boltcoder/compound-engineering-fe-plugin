@@ -132,17 +132,10 @@ The names below are skill-local prompt asset file stems under `references/agents
 **System-Wide Impact**
 - `architecture-strategist` for cross-boundary effects, interface surfaces, and architectural knock-on impact
 - `agent-native-planning-strategist` for action parity, context parity, shared workspace, tool granularity, approval boundaries, and agent execution lifecycle in agent-capable systems
-- Add the specific specialist that matches the risk:
-  - `performance-oracle` for scalability, latency, throughput, and resource-risk analysis
-  - `security-sentinel` for auth, validation, exploit surfaces, and security boundary review
-  - `data-integrity-guardian` for migrations, persistent state safety, consistency, and data lifecycle risks
 
 **Risks & Dependencies / Operational Notes**
-- Use the specialist that matches the actual risk:
-  - `security-sentinel` for security, auth, privacy, and exploit risk
-  - `data-integrity-guardian` for migrations, backfills, persistent data safety, constraints, transaction boundaries, and production data transformation risk (plan context — not the PR-review `data-migration-reviewer` persona)
-  - `deployment-verification-agent` for rollout checklists, rollback planning, and launch verification
-  - `performance-oracle` for capacity, latency, and scaling concerns
+- `architecture-strategist` for architectural risk, dependency analysis, and operational tradeoffs
+- `agent-native-planning-strategist` for agent-lifecycle risks, approval-gate failures, and workspace-state hazards
 
 **Agent Prompt Shape:**
 

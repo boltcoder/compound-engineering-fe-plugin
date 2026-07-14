@@ -119,7 +119,7 @@ Starting document state:
 
 ### From 2026-04-10 review
 
-- **Alias compatibility-theater concern** — Risks (P1, scope-guardian, confidence 75)
+- **Alias compatibility-theater concern** — Risks (P1, feasibility, confidence 75)
 
   The alias exists without documented external consumers...
 
@@ -136,13 +136,13 @@ After appending two findings in a 2026-04-18 session:
 
 ### From 2026-04-10 review
 
-- **Alias compatibility-theater concern** — Risks (P1, scope-guardian, confidence 75)
+- **Alias compatibility-theater concern** — Risks (P1, feasibility, confidence 75)
 
   The alias exists without documented external consumers...
 
 ### From 2026-04-18 review
 
-- **Unit 2/3 merge judgment call** — Scope Boundaries (P2, scope-guardian, confidence 75)
+- **Unit 2/3 merge judgment call** — Scope Boundaries (P2, coherence, confidence 75)
 
   The two units update consumer sites that deploy together. Splitting
   adds dependency tracking without enabling independent delivery.
