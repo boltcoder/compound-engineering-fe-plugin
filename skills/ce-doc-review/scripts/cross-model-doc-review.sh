@@ -71,6 +71,10 @@ set -uo pipefail
 # before normalize — leaving fold-in files with a bare `reviewer` field.
 trap '' HUP
 
+# Filled while a peer process group is live; TERM/INT handler (installed after
+# reap() is defined) reaps it so an orchestrator kill cannot leave orphans.
+ACTIVE_PEER_PID=""
+
 log()  { printf '[cross-model-doc] %s\n' "$*" >&2; }
 skip() { log "$*"; exit 0; }   # non-blocking: announce reason, exit clean, no output
 
@@ -339,6 +343,17 @@ reap() {
   if [ "$grp" = 1 ]; then kill -KILL -- -"$pid" 2>/dev/null; else kill -KILL "$pid" 2>/dev/null; fi
 }
 
+# TERM/INT: reap the live peer group, then exit cleanly (HUP remains ignored).
+on_term() {
+  if [ -n "${ACTIVE_PEER_PID:-}" ]; then
+    log "received TERM/INT; reaping peer process group $ACTIVE_PEER_PID"
+    reap "$ACTIVE_PEER_PID" 2>/dev/null || true
+    ACTIVE_PEER_PID=""
+  fi
+  exit 0
+}
+trap 'on_term' TERM INT
+
 # Build the CMD array for a route (bash 3.2-safe: no mapfile).
 build_cmd() {
   CMD=()
@@ -353,6 +368,7 @@ run_codex_cmd() {   # CMD already built for the codex route; streams to PEERLOG,
   set -m
   "${CMD[@]}" < "$PROMPT_FILE" > "$PEERLOG" 2>&1 &
   local pid=$!
+  ACTIVE_PEER_PID="$pid"
   [ "$prev" = 0 ] && set +m
   local start last=-1 lastchg now size
   start="$(date +%s)"; lastchg="$start"
@@ -367,6 +383,7 @@ run_codex_cmd() {   # CMD already built for the codex route; streams to PEERLOG,
     fi
   done
   wait "$pid" 2>/dev/null || true
+  ACTIVE_PEER_PID=""
 }
 
 run_timeout_cmd() {   # $1 = stdin file ("" -> /dev/null). CMD already built.
@@ -375,13 +392,18 @@ run_timeout_cmd() {   # $1 = stdin file ("" -> /dev/null). CMD already built.
   # has no repo files, and no sibling lens's fold-in artifact, in reach. grok/cursor
   # also carry their own --cwd/--workspace flag pointed at the same PEER_WORKDIR.
   local stdin_file="${1:-}"; [ -n "$stdin_file" ] || stdin_file=/dev/null
+  local prev; case "$-" in *m*) prev=1;; *) prev=0;; esac
+  set -m
   if [ -n "$TO_BIN" ]; then
-    ( cd "$PEER_WORKDIR" && exec "$TO_BIN" -k 10 "$HARD_SECS" "${CMD[@]}" ) < "$stdin_file" > "$PEERLOG" 2>/dev/null \
-      || log "peer exited non-zero or timed out"
+    ( cd "$PEER_WORKDIR" && exec "$TO_BIN" -k 10 "$HARD_SECS" "${CMD[@]}" ) < "$stdin_file" > "$PEERLOG" 2>/dev/null &
   else
-    ( cd "$PEER_WORKDIR" && exec perl -e 'alarm shift; exec @ARGV' "$HARD_SECS" "${CMD[@]}" ) < "$stdin_file" > "$PEERLOG" 2>/dev/null \
-      || log "peer exited non-zero or timed out"
+    ( cd "$PEER_WORKDIR" && exec perl -e 'alarm shift; exec @ARGV' "$HARD_SECS" "${CMD[@]}" ) < "$stdin_file" > "$PEERLOG" 2>/dev/null &
   fi
+  local pid=$!
+  ACTIVE_PEER_PID="$pid"
+  [ "$prev" = 0 ] && set +m
+  wait "$pid" 2>/dev/null || log "peer exited non-zero or timed out"
+  ACTIVE_PEER_PID=""
 }
 
 # Brace-match the largest {...} object containing "findings" out of raw stdout.
