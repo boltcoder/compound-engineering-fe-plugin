@@ -384,6 +384,17 @@ describe("cross-model-adversarial-review skip paths — non-blocking, no file", 
     expect(run(["claude", "codex", "", runDir], runDir, env).code).toBe(0)
     expect(run(["claude", "codex", "HEAD", "/no/such/run-dir"], runDir, env).files).toHaveLength(0)
   })
+
+  test("surfaces short provider errors without dropping the diagnostic", () => {
+    const { env } = sandbox(
+      ["claude"],
+      "#!/bin/sh\ncat >/dev/null\nprintf '%s' 'schema invalid' >&2\nexit 1\n",
+    )
+    const runDir = makeRunDir()
+    const r = run(["codex", "claude", "HEAD", runDir], runDir, env)
+    expect(r.code).toBe(0)
+    expect(r.stderr).toContain("peer skip evidence (stderr): schema invalid")
+  })
 })
 
 describe("cross-model-adversarial-review normalization", () => {
@@ -698,6 +709,7 @@ describe("cross-model-adversarial-review argv integrity", () => {
     const captured = readFileSync(capFile, "utf8")
     expect(captured).toContain('"$schema"')
     expect(captured).toContain("testing_gaps")
+    expect(JSON.parse(captured)).not.toHaveProperty("_meta")
   })
 
   test("cursor-agent routes receive the prompt via stdin", () => {

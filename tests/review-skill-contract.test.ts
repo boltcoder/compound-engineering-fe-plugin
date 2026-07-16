@@ -6,6 +6,117 @@ async function readRepoFile(relativePath: string): Promise<string> {
   return readFile(path.join(process.cwd(), relativePath), "utf8")
 }
 
+const STRICT_SCHEMA_KEYWORDS = new Set([
+  "$comment",
+  "$id",
+  "$ref",
+  "$schema",
+  "additionalItems",
+  "additionalProperties",
+  "allOf",
+  "anyOf",
+  "const",
+  "contains",
+  "contentEncoding",
+  "contentMediaType",
+  "default",
+  "definitions",
+  "dependencies",
+  "description",
+  "else",
+  "enum",
+  "examples",
+  "exclusiveMaximum",
+  "exclusiveMinimum",
+  "format",
+  "if",
+  "items",
+  "maxItems",
+  "maxLength",
+  "maxProperties",
+  "maximum",
+  "minItems",
+  "minLength",
+  "minProperties",
+  "minimum",
+  "multipleOf",
+  "not",
+  "oneOf",
+  "pattern",
+  "patternProperties",
+  "properties",
+  "propertyNames",
+  "readOnly",
+  "required",
+  "then",
+  "title",
+  "type",
+  "uniqueItems",
+  "writeOnly",
+])
+
+function extensionSchemaKeywords(schema: unknown, location = "$."): string[] {
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) return []
+
+  const record = schema as Record<string, unknown>
+  const extensions = Object.keys(record)
+    .filter((key) => !STRICT_SCHEMA_KEYWORDS.has(key))
+    .map((key) => `${location}${key}`)
+
+  for (const container of ["properties", "patternProperties", "definitions"] as const) {
+    const children = record[container]
+    if (children && typeof children === "object" && !Array.isArray(children)) {
+      for (const [name, child] of Object.entries(children)) {
+        extensions.push(...extensionSchemaKeywords(child, `${location}${container}.${name}.`))
+      }
+    }
+  }
+
+  for (const keyword of [
+    "additionalItems",
+    "additionalProperties",
+    "contains",
+    "else",
+    "if",
+    "not",
+    "propertyNames",
+    "then",
+  ] as const) {
+    if (typeof record[keyword] === "object") {
+      extensions.push(...extensionSchemaKeywords(record[keyword], `${location}${keyword}.`))
+    }
+  }
+
+  const items = record.items
+  if (Array.isArray(items)) {
+    items.forEach((item, index) => {
+      extensions.push(...extensionSchemaKeywords(item, `${location}items[${index}].`))
+    })
+  } else if (items) {
+    extensions.push(...extensionSchemaKeywords(items, `${location}items.`))
+  }
+
+  for (const keyword of ["allOf", "anyOf", "oneOf"] as const) {
+    const alternatives = record[keyword]
+    if (Array.isArray(alternatives)) {
+      alternatives.forEach((alternative, index) => {
+        extensions.push(...extensionSchemaKeywords(alternative, `${location}${keyword}[${index}].`))
+      })
+    }
+  }
+
+  const dependencies = record.dependencies
+  if (dependencies && typeof dependencies === "object" && !Array.isArray(dependencies)) {
+    for (const [name, dependency] of Object.entries(dependencies)) {
+      if (!Array.isArray(dependency)) {
+        extensions.push(...extensionSchemaKeywords(dependency, `${location}dependencies.${name}.`))
+      }
+    }
+  }
+
+  return extensions
+}
+
 function personaPromptPath(personaName: string): string {
   return `skills/ce-code-review/references/personas/${personaName}.md`
 }
@@ -114,10 +225,6 @@ describe("ce-code-review contract", () => {
       "skills/ce-code-review/references/findings-schema.json",
     )
     const schema = JSON.parse(rawSchema) as {
-      _meta: {
-        confidence_thresholds: { suppress: string; report: string }
-        confidence_anchors: Record<string, string>
-      }
       properties: {
         findings: {
           items: {
@@ -152,19 +259,18 @@ describe("ce-code-review contract", () => {
     expect(schema.properties.findings.items.properties.confidence.type).toBe("integer")
     expect(schema.properties.findings.items.properties.confidence.enum).toEqual([0, 25, 50, 75, 100])
 
-    // Threshold: anchor 75 (P0 escape at anchor 50)
-    expect(schema._meta.confidence_thresholds.suppress).toContain("anchor 75")
-    expect(schema._meta.confidence_thresholds.suppress).toContain("anchor 50")
-    expect(schema._meta.confidence_thresholds.suppress).toMatch(/P0/)
+  })
 
-    // Behavioral anchors documented for personas
-    expect(schema._meta.confidence_anchors).toBeDefined()
-    expect(schema._meta.confidence_anchors["0"]).toBeDefined()
-    expect(schema._meta.confidence_anchors["25"]).toBeDefined()
-    expect(schema._meta.confidence_anchors["50"]).toBeDefined()
-    expect(schema._meta.confidence_anchors["75"]).toBeDefined()
-    expect(schema._meta.confidence_anchors["100"]).toBeDefined()
-
+  test("keeps extension keywords out of draft-07 cross-model schemas", async () => {
+    for (const schemaPath of [
+      "skills/ce-code-review/references/findings-schema.json",
+      "skills/ce-doc-review/references/findings-schema.json",
+      "skills/ce-pov/references/pov-schema.json",
+    ]) {
+      const schema = JSON.parse(await readRepoFile(schemaPath))
+      expect(schema.$schema).toBe("http://json-schema.org/draft-07/schema#")
+      expect(extensionSchemaKeywords(schema)).toEqual([])
+    }
   })
 
   test("subagent template carries verbatim 5-anchor rubric and lint-ignore suppression", async () => {

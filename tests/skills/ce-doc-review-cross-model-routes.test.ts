@@ -440,6 +440,22 @@ describe("cross-model-doc-review skip paths (R11, R16) — non-blocking, no file
     expect(run(["claude", "codex", "not-a-lens", doc, "plan", "none", runDir], runDir, env).code).toBe(0)
     expect(run(["claude", "codex", "adversarial", "/no/such/doc", "plan", "none", runDir], runDir, env).files).toHaveLength(0)
   })
+
+  test("surfaces short provider errors without dropping the diagnostic", () => {
+    const { env } = sandbox(
+      ["claude"],
+      "#!/bin/sh\ncat >/dev/null\nprintf '%s' 'schema invalid' >&2\nexit 1\n",
+    )
+    const doc = makeDoc()
+    const runDir = makeRunDir()
+    const r = run(
+      ["codex", "claude", "adversarial", doc, "plan", "none", runDir],
+      runDir,
+      env,
+    )
+    expect(r.code).toBe(0)
+    expect(r.stderr).toContain("peer skip evidence (stderr): schema invalid")
+  })
 })
 
 describe("cross-model-doc-review normalization (R18, KTD5)", () => {
