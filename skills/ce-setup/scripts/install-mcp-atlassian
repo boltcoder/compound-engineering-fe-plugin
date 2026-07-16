@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+# Atlassian MCP server (mcp-atlassian) Docker setup helper.
+# Checks Docker availability, image presence, JIRA_API_KEY env var, and
+# existing opencode.json MCP config. Optionally pulls the Docker image.
+
+set -o pipefail
+
+IMAGE="ghcr.io/sooperset/mcp-atlassian:latest"
+OPENCODE_GLOBAL="$HOME/.config/opencode/opencode.json"
+OPENCODE_GLOBALC="$HOME/.config/opencode/opencode.jsonc"
+
+action="check"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --pull) action="pull"; shift ;;
+    *) shift ;;
+  esac
+done
+
+# =====================================================
+#  Helpers
+# =====================================================
+
+ok()      { echo "  🟢  $1"; }
+warn()    { echo "  🟡  $1"; }
+skip()    { echo "  ➖  $1"; }
+detail()  { echo "       $1"; }
+section() { echo ""; echo " $1"; }
+
+# =====================================================
+#  Docker availability
+# =====================================================
+
+section "Docker"
+
+docker_ok="no"
+if command -v docker >/dev/null 2>&1; then
+  if docker info >/dev/null 2>&1; then
+    ok "Docker is installed and running"
+    docker_ok="yes"
+  else
+    warn "Docker is installed but not running (start Docker Desktop or the daemon)"
+  fi
+else
+  warn "Docker is not installed"
+  detail "Install: https://docs.docker.com/get-docker/"
+fi
+
+# =====================================================
+#  Docker image
+# =====================================================
+
+section "mcp-atlassian image"
+
+image_ok="no"
+if [ "$docker_ok" = "yes" ]; then
+  if docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    ok "Image $IMAGE is available locally"
+    image_ok="yes"
+  else
+    if [ "$action" = "pull" ]; then
+      echo "       Pulling $IMAGE ..."
+      if docker pull "$IMAGE" 2>&1 | tail -1; then
+        ok "Image pulled successfully"
+        image_ok="yes"
+      else
+        warn "Failed to pull image"
+      fi
+    else
+      warn "Image not pulled yet (run with --pull or ce-setup will offer to pull)"
+      detail "docker pull $IMAGE"
+    fi
+  fi
+else
+  skip "Cannot check image without Docker"
+fi
+
+# =====================================================
+#  JIRA credentials (JIRA_API_KEY preferred, JIRA_API_TOKEN fallback)
+# =====================================================
+
+section "JIRA credentials"
+
+key_ok="no"
+key_var=""
+if [ -n "$JIRA_API_KEY" ]; then
+  key_var="JIRA_API_KEY"
+  ok "JIRA_API_KEY is set in the current environment"
+  key_ok="yes"
+elif [ -n "$JIRA_API_TOKEN" ]; then
+  key_var="JIRA_API_TOKEN"
+  ok "JIRA_API_TOKEN is set in the current environment"
+  key_ok="yes"
+else
+  warn "Neither JIRA_API_KEY nor JIRA_API_TOKEN is set in the current environment"
+  detail "Export one in your shell profile (~/.zshrc or ~/.bashrc):"
+  detail '  export JIRA_API_KEY="your_atlassian_api_token"'
+  detail "  (or export JIRA_API_TOKEN -- they are interchangeable)"
+  detail "Create a token at:"
+  detail "  https://id.atlassian.com/manage-profile/security/api-tokens"
+fi
+
+# Export the resolved value as JIRA_API_TOKEN so the Docker container and
+# any downstream opencode config both receive a single canonical name.
+if [ "$key_ok" = "yes" ] && [ "$key_var" = "JIRA_API_KEY" ]; then
+  export JIRA_API_TOKEN="$JIRA_API_KEY"
+fi
+
+# =====================================================
+#  opencode.json MCP config
+# =====================================================
+
+section "opencode MCP config"
+
+config_file=""
+for f in "$OPENCODE_GLOBAL" "$OPENCODE_GLOBALC"; do
+  [ -f "$f" ] && config_file="$f" && break
+done
+
+config_ok="no"
+if [ -n "$config_file" ]; then
+  if command -v jq >/dev/null 2>&1; then
+    if jq -e '.mcp["mcp-atlassian"]' "$config_file" >/dev/null 2>&1; then
+      ok "mcp-atlassian entry found in $config_file"
+      config_ok="yes"
+    else
+      warn "mcp-atlassian entry not found in $config_file"
+      detail "ce-setup will add it in the Atlassian MCP phase"
+    fi
+  else
+    skip "jq not available -- cannot inspect $config_file"
+    detail "Install jq or verify manually that mcp-atlassian is configured"
+  fi
+else
+  warn "No global opencode config found"
+  detail "Expected: $OPENCODE_GLOBAL"
+  detail "ce-setup will create it"
+fi
+
+# =====================================================
+#  Summary
+# =====================================================
+
+echo ""
+ready=0
+[ "$docker_ok" = "yes" ] && ready=$((ready + 1))
+[ "$image_ok" = "yes" ] && ready=$((ready + 1))
+[ "$key_ok" = "yes" ] && ready=$((ready + 1))
+[ "$config_ok" = "yes" ] && ready=$((ready + 1))
+
+if [ "$ready" -eq 4 ]; then
+  echo " ✅  mcp-atlassian is fully configured ($ready/4)"
+elif [ "$ready" -eq 0 ]; then
+  echo " ❌  mcp-atlassian is not set up yet (0/4)"
+else
+  echo " ⚠️  mcp-atlassian partially ready ($ready/4)"
+fi
+echo ""
