@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Atlassian MCP server (mcp-atlassian) Docker setup helper.
-# Checks Docker availability, image presence, JIRA_API_TOKEN env var, and
-# existing opencode.json MCP config. Optionally pulls the Docker image.
+# Checks Docker availability, image presence, Atlassian account connectivity
+# (JIRA_URL + JIRA_USERNAME + JIRA_API_TOKEN via the Jira /myself endpoint),
+# and existing opencode.json MCP config. Optionally pulls the Docker image.
 
 set -o pipefail
 
@@ -76,21 +77,74 @@ else
 fi
 
 # =====================================================
-#  JIRA credentials
+#  Atlassian account connectivity
 # =====================================================
+# Checks that JIRA_URL, JIRA_USERNAME, and JIRA_API_TOKEN are all set, then
+# makes an authenticated GET to the Jira /myself endpoint. A 200 response means
+# the credentials are valid and the account is reachable from this machine --
+# the real test that the mcp-atlassian container will be able to talk to Jira.
 
-section "JIRA credentials"
+section "Atlassian account connectivity"
 
-key_ok="no"
-if [ -n "$JIRA_API_TOKEN" ]; then
-  ok "JIRA_API_TOKEN is set in the current environment"
-  key_ok="yes"
-else
-  warn "JIRA_API_TOKEN is not set in the current environment"
-  detail "Export it in your shell profile (~/.zshrc or ~/.bashrc):"
+creds_ok="no"
+missing=""
+[ -z "$JIRA_URL" ] && missing="$missing JIRA_URL"
+[ -z "$JIRA_USERNAME" ] && missing="$missing JIRA_USERNAME"
+[ -z "$JIRA_API_TOKEN" ] && missing="$missing JIRA_API_TOKEN"
+
+if [ -n "$missing" ]; then
+  for v in $missing; do
+    warn "$v is not set in the current environment"
+  done
+  detail "Export all three in your shell profile (~/.zshrc or ~/.bashrc):"
+  detail '  export JIRA_URL="https://your-company.atlassian.net"'
+  detail '  export JIRA_USERNAME="your.email@company.com"'
   detail '  export JIRA_API_TOKEN="your_atlassian_api_token"'
   detail "Create a token at:"
   detail "  https://id.atlassian.com/manage-profile/security/api-tokens"
+else
+  ok "JIRA_URL, JIRA_USERNAME, and JIRA_API_TOKEN are all set"
+
+  if command -v curl >/dev/null 2>&1; then
+    myself_url="${JIRA_URL%/}/rest/api/3/myself"
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+      -u "${JIRA_USERNAME}:${JIRA_API_TOKEN}" \
+      -H "Accept: application/json" \
+      --max-time 10 \
+      "$myself_url" 2>/dev/null || echo "000")
+
+    case "$http_code" in
+      200)
+        ok "Atlassian account reachable -- credentials are valid ($http_code)"
+        creds_ok="yes"
+        ;;
+      401|403)
+        warn "Authentication failed ($http_code) -- JIRA_API_TOKEN or JIRA_USERNAME is wrong"
+        detail "Create a new token at:"
+        detail "  https://id.atlassian.com/manage-profile/security/api-tokens"
+        detail "Endpoint tried: $myself_url"
+        ;;
+      404)
+        warn "JIRA_URL not found ($http_code) -- check the URL is your Atlassian Cloud base"
+        detail "  expected: https://your-company.atlassian.net"
+        detail "  got: $JIRA_URL"
+        ;;
+      000)
+        warn "Could not reach $JIRA_URL -- network/DNS error or URL is malformed"
+        detail "Verify JIRA_URL is a reachable Atlassian Cloud instance"
+        ;;
+      *)
+        warn "Unexpected response ($http_code) from $myself_url"
+        detail "The mcp-atlassian container may still work, but connectivity is unconfirmed"
+        ;;
+    esac
+  else
+    warn "curl is not available -- cannot verify account connectivity"
+    detail "Install curl, or check credentials manually against:"
+    detail "  ${JIRA_URL%/}/rest/api/3/myself"
+    ok "Credentials are set (connectivity not verified)"
+    creds_ok="yes"
+  fi
 fi
 
 # =====================================================
@@ -132,7 +186,7 @@ echo ""
 ready=0
 [ "$docker_ok" = "yes" ] && ready=$((ready + 1))
 [ "$image_ok" = "yes" ] && ready=$((ready + 1))
-[ "$key_ok" = "yes" ] && ready=$((ready + 1))
+[ "$creds_ok" = "yes" ] && ready=$((ready + 1))
 [ "$config_ok" = "yes" ] && ready=$((ready + 1))
 
 if [ "$ready" -eq 4 ]; then

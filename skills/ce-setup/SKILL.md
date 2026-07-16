@@ -102,7 +102,7 @@ Append the entry to the repo-root `.gitignore` only if the user approves. Do not
 
 ## Phase 3: Atlassian MCP Server (optional)
 
-This phase sets up the `mcp-atlassian` server in a local Docker container so Jira and Confluence tools are available to the agent. The user must export `JIRA_API_TOKEN` on their own system; ce-setup never prompts for or stores the secret value. It is entirely optional — declining skips the whole phase.
+This phase sets up the `mcp-atlassian` server in a local Docker container so Jira and Confluence tools are available to the agent. The user must export `JIRA_URL`, `JIRA_USERNAME`, and `JIRA_API_TOKEN` on their own system; ce-setup never prompts for or stores the secret value. It is entirely optional — declining skips the whole phase.
 
 ### Step 8: Run the Atlassian MCP readiness check
 
@@ -113,7 +113,7 @@ SKILL_DIR="<absolute path of the directory containing this SKILL.md>";
 if [ -f "$SKILL_DIR/scripts/install-mcp-atlassian" ]; then bash "$SKILL_DIR/scripts/install-mcp-atlassian"; else echo "Bundled script not found at $SKILL_DIR/scripts/install-mcp-atlassian; skipping Atlassian MCP phase."; fi
 ```
 
-Display the output to the user. The script reports four readiness dimensions: Docker running, image pulled, `JIRA_API_TOKEN` set, and opencode MCP config present.
+Display the output to the user. The script reports four readiness dimensions: Docker running, image pulled, Atlassian account reachable (authenticated GET to Jira `/myself` using `JIRA_URL` + `JIRA_USERNAME` + `JIRA_API_TOKEN`), and opencode MCP config present.
 
 ### Step 9: Ask Whether to Set Up Atlassian MCP
 
@@ -129,24 +129,24 @@ This runs mcp-atlassian in a local container and wires it into opencode.
 
 If the user declines, skip the rest of this phase. If the user accepts, continue.
 
-### Step 10: Verify JIRA_API_TOKEN is set
+### Step 10: Verify Atlassian credentials are valid
 
-The user must have exported `JIRA_API_TOKEN` in their shell. Check with a single command:
+The readiness check in Step 8 already attempted an authenticated GET to the Jira `/myself` endpoint using `JIRA_URL`, `JIRA_USERNAME`, and `JIRA_API_TOKEN`. If that probe returned 200, the credentials are valid and the account is reachable — continue to Step 11.
 
-```bash
-if [ -n "${JIRA_API_TOKEN:-}" ]; then echo "set"; else echo "unset"; fi
-```
-
-If unset, stop this phase and print guidance — do not prompt for the secret value and never store it:
+If the probe failed (401/403 = bad token, 404 = wrong URL, 000 = network error), or if any of the three env vars were unset, do not continue. Print guidance — never prompt for the secret value and never store it:
 
 ```text
-JIRA_API_TOKEN is not set in your environment.
-Create an Atlassian API token at:
+Atlassian credentials could not be verified.
+The script needs all three exported:
+  JIRA_URL="https://your-company.atlassian.net"
+  JIRA_USERNAME="your.email@company.com"
+  JIRA_API_TOKEN="your_atlassian_api_token"
+Create a token at:
   https://id.atlassian.com/manage-profile/security/api-tokens
-Then export it in your shell profile (~/.zshrc or ~/.bashrc):
-  export JIRA_API_TOKEN="your_token_here"
 Restart your terminal (or source the profile) and run /ce-setup again.
 ```
+
+If the probe succeeded but `JIRA_URL` or `JIRA_USERNAME` was unset (the script skips the API call in that case and reports the vars as missing), stop with the same guidance.
 
 ### Step 11: Pull the Docker image if needed
 
