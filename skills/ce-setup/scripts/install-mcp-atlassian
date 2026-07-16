@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Atlassian MCP server (mcp-atlassian) Docker setup helper.
-# Checks Docker availability, image presence, JIRA_API_KEY env var, and
+# Checks Docker availability, image presence, JIRA_API_TOKEN env var, and
 # existing opencode.json MCP config. Optionally pulls the Docker image.
 
 set -o pipefail
@@ -76,34 +76,21 @@ else
 fi
 
 # =====================================================
-#  JIRA credentials (JIRA_API_KEY preferred, JIRA_API_TOKEN fallback)
+#  JIRA credentials
 # =====================================================
 
 section "JIRA credentials"
 
 key_ok="no"
-key_var=""
-if [ -n "$JIRA_API_KEY" ]; then
-  key_var="JIRA_API_KEY"
-  ok "JIRA_API_KEY is set in the current environment"
-  key_ok="yes"
-elif [ -n "$JIRA_API_TOKEN" ]; then
-  key_var="JIRA_API_TOKEN"
+if [ -n "$JIRA_API_TOKEN" ]; then
   ok "JIRA_API_TOKEN is set in the current environment"
   key_ok="yes"
 else
-  warn "Neither JIRA_API_KEY nor JIRA_API_TOKEN is set in the current environment"
-  detail "Export one in your shell profile (~/.zshrc or ~/.bashrc):"
-  detail '  export JIRA_API_KEY="your_atlassian_api_token"'
-  detail "  (or export JIRA_API_TOKEN -- they are interchangeable)"
+  warn "JIRA_API_TOKEN is not set in the current environment"
+  detail "Export it in your shell profile (~/.zshrc or ~/.bashrc):"
+  detail '  export JIRA_API_TOKEN="your_atlassian_api_token"'
   detail "Create a token at:"
   detail "  https://id.atlassian.com/manage-profile/security/api-tokens"
-fi
-
-# Export the resolved value as JIRA_API_TOKEN so the Docker container and
-# any downstream opencode config both receive a single canonical name.
-if [ "$key_ok" = "yes" ] && [ "$key_var" = "JIRA_API_KEY" ]; then
-  export JIRA_API_TOKEN="$JIRA_API_KEY"
 fi
 
 # =====================================================

@@ -102,7 +102,7 @@ Append the entry to the repo-root `.gitignore` only if the user approves. Do not
 
 ## Phase 3: Atlassian MCP Server (optional)
 
-This phase sets up the `mcp-atlassian` server in a local Docker container so Jira and Confluence tools are available to the agent. The user must export `JIRA_API_KEY` (or `JIRA_API_TOKEN`) on their own system; ce-setup never prompts for or stores the secret value. It is entirely optional — declining skips the whole phase.
+This phase sets up the `mcp-atlassian` server in a local Docker container so Jira and Confluence tools are available to the agent. The user must export `JIRA_API_TOKEN` on their own system; ce-setup never prompts for or stores the secret value. It is entirely optional — declining skips the whole phase.
 
 ### Step 8: Run the Atlassian MCP readiness check
 
@@ -113,7 +113,7 @@ SKILL_DIR="<absolute path of the directory containing this SKILL.md>";
 if [ -f "$SKILL_DIR/scripts/install-mcp-atlassian" ]; then bash "$SKILL_DIR/scripts/install-mcp-atlassian"; else echo "Bundled script not found at $SKILL_DIR/scripts/install-mcp-atlassian; skipping Atlassian MCP phase."; fi
 ```
 
-Display the output to the user. The script reports four readiness dimensions: Docker running, image pulled, `JIRA_API_KEY`/`JIRA_API_TOKEN` set, and opencode MCP config present.
+Display the output to the user. The script reports four readiness dimensions: Docker running, image pulled, `JIRA_API_TOKEN` set, and opencode MCP config present.
 
 ### Step 9: Ask Whether to Set Up Atlassian MCP
 
@@ -129,26 +129,24 @@ This runs mcp-atlassian in a local container and wires it into opencode.
 
 If the user declines, skip the rest of this phase. If the user accepts, continue.
 
-### Step 10: Verify JIRA_API_KEY or JIRA_API_TOKEN is set
+### Step 10: Verify JIRA_API_TOKEN is set
 
-The user must have exported `JIRA_API_KEY` (preferred) or `JIRA_API_TOKEN` in their shell. Check with a single command:
+The user must have exported `JIRA_API_TOKEN` in their shell. Check with a single command:
 
 ```bash
-if [ -n "${JIRA_API_KEY:-${JIRA_API_TOKEN:-}}" ]; then echo "set"; else echo "unset"; fi
+if [ -n "${JIRA_API_TOKEN:-}" ]; then echo "set"; else echo "unset"; fi
 ```
 
 If unset, stop this phase and print guidance — do not prompt for the secret value and never store it:
 
 ```text
-JIRA_API_KEY (or JIRA_API_TOKEN) is not set in your environment.
+JIRA_API_TOKEN is not set in your environment.
 Create an Atlassian API token at:
   https://id.atlassian.com/manage-profile/security/api-tokens
 Then export it in your shell profile (~/.zshrc or ~/.bashrc):
-  export JIRA_API_KEY="your_token_here"
+  export JIRA_API_TOKEN="your_token_here"
 Restart your terminal (or source the profile) and run /ce-setup again.
 ```
-
-Both env var names are interchangeable: `JIRA_API_KEY` is the user-facing name and is mapped to `JIRA_API_TOKEN` (the name the upstream container reads) in the opencode MCP config below.
 
 ### Step 11: Pull the Docker image if needed
 
@@ -164,12 +162,7 @@ If Docker is not installed or not running, stop this phase and tell the user to 
 
 The target is the user's global opencode config at `~/.config/opencode/opencode.json` (create it if missing; if `opencode.jsonc` exists instead, edit that). ce-set-up adds an `mcp-atlassian` entry under the top-level `mcp` key without disturbing existing MCP servers or other config.
 
-The entry uses opencode's `{env:VAR}` substitution so the secret is read from the environment at runtime, never written into the config file. The container reads `JIRA_API_TOKEN`; pick the substitution based on which env var the user actually exports (detected in Step 10):
-
-- If the user exports `JIRA_API_KEY`: map it -> `"JIRA_API_TOKEN": "{env:JIRA_API_KEY}"`
-- If the user exports `JIRA_API_TOKEN`: use it directly -> `"JIRA_API_TOKEN": "{env:JIRA_API_TOKEN}"`
-
-Template (substitute the `JIRA_API_TOKEN` value per the rule above):
+The entry uses opencode's `{env:VAR}` substitution so the secret is read from the environment at runtime, never written into the config file:
 
 ```json
 {
@@ -187,7 +180,7 @@ Template (substitute the `JIRA_API_TOKEN` value per the rule above):
       "environment": {
         "JIRA_URL": "{env:JIRA_URL}",
         "JIRA_USERNAME": "{env:JIRA_USERNAME}",
-        "JIRA_API_TOKEN": "{env:JIRA_API_KEY}"
+        "JIRA_API_TOKEN": "{env:JIRA_API_TOKEN}"
       }
     }
   }
