@@ -2,7 +2,7 @@
 
 AI skills that make each unit of engineering work easier than the last.
 
-This is a streamlined fork of [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin), focused on the workflow of a frontend engineering team building large-scale client-side rendered React + TypeScript applications. The converter/marketplace/release infrastructure and skills outside a frontend team's workflow (iOS testing, feedback ops, product analytics, launch copy, the Proof editor) have been removed. The 24 remaining skills are domain-agnostic engineering workflow skills plus browser/frontend QA skills.
+This is a streamlined fork of [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin), focused on the workflow of a frontend engineering team building large-scale client-side rendered React + TypeScript applications. The converter/marketplace/release infrastructure and skills outside a frontend team's workflow (iOS testing, feedback ops, product analytics, launch copy, the Proof editor) have been removed. The 25 remaining skills are domain-agnostic engineering workflow skills plus browser/frontend QA skills.
 
 ## Philosophy
 
@@ -104,7 +104,7 @@ For the full catalog and how each skill chains together, see [docs/skills](docs/
 
 After installing the skills in your agent harness, run `/ce-setup` in any project. It checks repo-local config, reports optional tool capabilities, and helps keep machine-local settings safely gitignored.
 
-The plugin ships 24 skills. Specialist review, research, and workflow behavior lives inside the owning skills as skill-local prompt assets.
+The plugin ships 25 skills. Specialist review, research, and workflow behavior lives inside the owning skills as skill-local prompt assets.
 
 ### Full Skill Inventory
 
