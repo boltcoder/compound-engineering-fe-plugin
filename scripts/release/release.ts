@@ -189,6 +189,45 @@ function prependChangelog(entry: string): void {
   writeFileSync(CHANGELOG_FILE, newContent)
 }
 
+function generateConsumerUpgradeNotes(version: string): string {
+  return `
+
+---
+
+## Upgrading
+
+### Step 1 — update the plugin ref and restart
+
+Edit \`~/.config/opencode/opencode.json\` and set the plugin array entry to pin this release:
+
+\`\`\`json
+{
+  "plugin": ["compound-engineering-fe@git+https://github.com/boltcoder/compound-engineering-fe-plugin.git#v${version}"]
+}
+\`\`\`
+
+Restart opencode.
+
+### Step 2 — run setup
+
+In any project, paste:
+
+\`\`\`
+/ce-setup
+\`\`\`
+
+It will check required tools (\`gh\`, \`agent-browser\`, \`docker\`), then walk you through Jira setup — it asks for your GitHub username, Atlassian email, and API token one by one and writes them to your shell profile automatically. Have your API token ready (create one at https://id.atlassian.com/manage-profile/security/api-tokens).
+
+### Prerequisites (install before running /ce-setup if missing)
+
+\`\`\`bash
+brew install gh
+npm install -g agent-browser && agent-browser install
+# Docker Desktop: https://docs.docker.com/get-docker/
+\`\`\`
+`
+}
+
 // =====================================================
 //  Main
 // =====================================================
@@ -284,7 +323,8 @@ console.log("   ✓ Pushed.")
 
 // 8. Create GitHub Release
 console.log(`\n8. Creating GitHub Release v${newVersion}...`)
-const releaseNotes = args.notes ?? changelogEntry
+const consumerUpgrade = generateConsumerUpgradeNotes(newVersion)
+const releaseNotes = (args.notes ?? changelogEntry) + consumerUpgrade
 const tmpFile = path.join(require("node:os").tmpdir(), `ce-release-${newVersion}.md`)
 writeFileSync(tmpFile, releaseNotes)
 run(`gh release create v${newVersion} --title "v${newVersion}" --notes-file "${tmpFile}"`)
