@@ -160,7 +160,7 @@ If Docker is not installed or not running, stop this phase and tell the user to 
 
 ### Step 12: Write the MCP server entry into opencode config
 
-The target is the user's global opencode config at `~/.config/opencode/opencode.json` (create it if missing; if `opencode.jsonc` exists instead, edit that). ce-set-up adds an `mcp-atlassian` entry under the top-level `mcp` key without disturbing existing MCP servers or other config.
+The target is the user's global opencode config at `~/.config/opencode/opencode.json` (create it if missing; if `opencode.jsonc` exists instead, edit that). ce-setup adds an `mcp-atlassian` entry under the top-level `mcp` key without disturbing existing MCP servers or other config.
 
 The entry uses opencode's `{env:VAR}` substitution so the secret is read from the environment at runtime, never written into the config file:
 
