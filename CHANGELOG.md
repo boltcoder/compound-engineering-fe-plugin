@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.20.2](https://github.com/boltcoder/compound-engineering-fe-plugin/compare/v3.20.1...v3.20.2) (2026-07-17)
+
+### Features
+
+* feat(release): append consumer upgrade prompt to GitHub Release notes (#9) (abe27ad)
+
+
 ## [3.20.1](https://github.com/boltcoder/compound-engineering-fe-plugin/compare/v3.20.0...v3.20.1) (2026-07-17)
 
 ### Bug Fixes
