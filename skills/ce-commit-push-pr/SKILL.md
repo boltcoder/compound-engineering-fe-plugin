@@ -81,11 +81,11 @@ The captured bare ID is validated against `^[A-Z][A-Z0-9_]+-\d+$`; a mismatch is
 ### `PR_PREFIX`
 
 Resolved only when `JIRA_TICKET_ID` is non-empty (the prefix is meaningless without a ticket to attach to a branch).
+1. **`GITHUB_PR_PREFIX_USERNAME` env var (preferred)** — read from the environment (exported in `~/.zshrc` or `~/.bashrc` by `/ce-setup` Phase 3). If set and non-empty, use it verbatim as `<pr-prefix>`. This is the unambiguous, portable answer. Do not require it — it is a convenience, not a gate.
 
-1. **`GITHUB_PR_PREFIX_USERNAME` config key (preferred)** — read from `<repo-root>/.compound-engineering/config.local.yaml` under the "Hive Based Configurations" stanza (the dedicated section this org's config uses). If set and non-empty, use it verbatim as `<pr-prefix>`. This is the unambiguous, portable answer. Do not require it — it is a convenience, not a gate. (The `GITHUB_PR_PREFIX_USERNAME` shell env var still wins as a per-session override if set.)
-2. **`git for-each-ref` inference** — run `git for-each-ref --format='%(refname:short)' refs/heads/` and collect the `<segment>/` prefix from each branch. Tally distinct prefixes (e.g. `shrey/`, `alice/`); the most frequent non-default prefix is the likely candidate. **This is ambiguous** — present the top candidate(s) via the platform's blocking question tool with options to confirm, type a different value, or be told to set `GITHUB_PR_PREFIX_USERNAME` in the config. Never silently take the first prefix when multiple distinct values appear; the user must confirm.
-3. **Ask** — if neither resolves, ask once via the blocking question tool: "PR branch prefix? (e.g. your GitHub username; set `GITHUB_PR_PREFIX_USERNAME` in `.compound-engineering/config.local.yaml` to skip this in future)".
+2. **`git for-each-ref` inference** — run `git for-each-ref --format='%(refname:short)' refs/heads/` and collect the `<segment>/` prefix from each branch. Tally distinct prefixes (e.g. `shrey/`, `alice/`); the most frequent non-default prefix is the likely candidate. **This is ambiguous** — present the top candidate(s) via the platform's blocking question tool with options to confirm, type a different value, or be told to set `GITHUB_PR_PREFIX_USERNAME` in their shell profile. Never silently take the first prefix when multiple distinct values appear; the user must confirm.
 
+3. **Ask** — if neither resolves, ask once via the blocking question tool: "PR branch prefix? (e.g. your GitHub username; set `GITHUB_PR_PREFIX_USERNAME` in your `~/.zshrc` to skip this in future)".
 The resolved `<pr-prefix>` is used only to form the branch name `<pr-prefix>/<TICKET-or-TICKET-with-suffix>` when Step 1 or Step 3 creates a branch (the suffix from the input is preserved on the branch; the bare ID is used for commit/PR-title prefixing). It is never written anywhere by this skill.
 
 ### Inherited short-circuit

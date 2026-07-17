@@ -93,12 +93,12 @@ describe("ce-commit-push-pr contract", () => {
     expect(content).toContain("HVD-9554#")
     expect(content).toContain("HVD-9554-2")
 
-    // PR_PREFIX resolution: config key preferred, git for-each-ref inference, ask.
+    // PR_PREFIX resolution: env var preferred, git for-each-ref inference, ask.
     expect(content).toContain("GITHUB_PR_PREFIX_USERNAME")
     expect(content).toMatch(/git for-each-ref --format='\%\(refname:short\)' refs\/heads\//)
     expect(content).toMatch(/Never silently take the first prefix when multiple distinct values appear/)
-    // Config key is the preferred resolution path (not env-var-only).
-    expect(content).toMatch(/GITHUB_PR_PREFIX_USERNAME` config key \(preferred\)/)
+    // Env var is the preferred resolution path (written to shell profile by ce-setup).
+    expect(content).toMatch(/GITHUB_PR_PREFIX_USERNAME` env var \(preferred\)/)
 
     // Branch naming: <pr-prefix>/<TICKET-or-TICKET-with-suffix> when ticket known (suffix preserved on the branch).
     expect(content).toMatch(/branch name is `<pr-prefix>\/<TICKET-or-TICKET-with-suffix>`/)
@@ -153,25 +153,28 @@ describe("ce-commit-push-pr contract", () => {
     // Branch creation from default uses <pr-prefix>/<TICKET-or-TICKET-with-suffix> when ticket known.
     expect(content).toMatch(/branch name is `<pr-prefix>\/<TICKET-or-TICKET-with-suffix>` instead of a content-derived name/)
     expect(content).toContain("GITHUB_PR_PREFIX_USERNAME")
-    // Config key is the preferred path.
-    expect(content).toMatch(/GITHUB_PR_PREFIX_USERNAME` config key in `\.compound-engineering\/config\.local\.yaml` \(preferred/)
+    // Env var is the preferred path (exported in shell profile by ce-setup).
+    expect(content).toMatch(/GITHUB_PR_PREFIX_USERNAME` env var \(preferred/)
   })
 
-  test("config templates use 'Hive Based Configurations' separator with the three keys", async () => {
+  test("config templates document shell-profile credentials under 'Hive Based Configurations'", async () => {
     for (const p of [
       "skills/ce-setup/references/config-template.yaml",
       ".compound-engineering/config.local.example.yaml",
     ]) {
       const template = await readRepoFile(p)
       expect(template).toContain("Hive Based Configurations")
-      // All three keys are present as active (uncommented) config keys.
-      expect(template).toMatch(/^GITHUB_PR_PREFIX_USERNAME=$/m)
-      expect(template).toMatch(/^JIRA_API_TOKEN=$/m)
-      expect(template).toMatch(/^JIRA_USERNAME=$/m)
       // jira_ticket frontmatter field is documented.
       expect(template).toContain("jira_ticket")
       // Branch naming with suffix preservation is documented.
       expect(template).toMatch(/<pr-prefix>\/<TICKET-ID>/)
+      // Credentials live in shell profile, not in this YAML file.
+      expect(template).toMatch(/Credentials live in your shell profile, NOT here/)
+      expect(template).toMatch(/~\/\.zshrc/)
+      // The three credential keys are NOT active config lines (they're env vars now).
+      expect(template).not.toMatch(/^GITHUB_PR_PREFIX_USERNAME=$/m)
+      expect(template).not.toMatch(/^JIRA_API_TOKEN=$/m)
+      expect(template).not.toMatch(/^JIRA_USERNAME=$/m)
     }
   })
 })

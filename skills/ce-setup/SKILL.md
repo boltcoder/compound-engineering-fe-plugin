@@ -10,7 +10,7 @@ disable-model-invocation: true
 
 Ask each question below using the platform's blocking question tool: `AskUserQuestion` in Claude Code (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded), `request_user_input` in Codex, `ask_question` in Antigravity CLI (`agy`), `ask_user` in Pi (requires the `pi-ask-user` extension). Fall back to a numbered list in chat only when no blocking tool exists in the harness or the call errors. Never silently skip or auto-configure.
 
-`ce-setup` is a lightweight health check and repo-local config helper. It does **not** bulk-install every optional dependency. Missing tools are reported as optional capabilities so the user can install only the workflows they use.
+`ce-setup` is a lightweight health check and repo-local config helper. It does **not** bulk-install every optional dependency. `gh`, `agent-browser`, and `docker` are **required** tools — if any is missing, setup blocks and tells the user to install them. Other tools (`jq`, `ast-grep`, `ffmpeg`) are reported as optional capabilities so the user can install only the workflows they use.
 
 ## Phase 1: Diagnose
 
@@ -39,7 +39,7 @@ Use the same command without `--version VERSION` if Step 1 could not determine a
 
 If the script is unavailable, perform the inline equivalent:
 
-1. Check optional tools with `command -v`: `agent-browser`, `gh`, `jq`, `ast-grep`, `ffmpeg`.
+1. Check required tools with `command -v`: `gh`, `agent-browser`, `docker`. Check optional tools: `jq`, `ast-grep`, `ffmpeg`.
 2. If inside a git repo, resolve the repo root with `git rev-parse --show-toplevel`.
 3. Check for obsolete `compound-engineering.local.md` at the repo root.
 4. Check whether `.compound-engineering/config.local.yaml` exists and, if it does, whether `git check-ignore -q .compound-engineering/config.local.yaml` succeeds.
@@ -57,7 +57,7 @@ Proceed to Phase 2 only if one or more repo-local project issues exist:
 
 If no project issues exist, proceed directly to Phase 3 (Atlassian MCP). Do not stop early — the Atlassian MCP check always runs.
 
-If optional tools are missing, do not offer a bulk install. The diagnostic already printed the relevant install command or project URL. Say: "Install optional tools only for the workflows you use."
+If optional tools are missing, do not offer a bulk install. The diagnostic already printed the relevant install command or project URL. Say: "Install optional tools only for the workflows you use." If **required** tools (`gh`, `agent-browser`, `docker`) are missing, stop and tell the user to install them before continuing — do not proceed to Phase 2 or Phase 3.
 
 ## Phase 2: Fix Repo-Local Issues
 
@@ -102,7 +102,7 @@ Append the entry to the repo-root `.gitignore` only if the user approves. Do not
 
 ## Phase 3: Atlassian MCP Server (optional)
 
-This phase sets up the `mcp-atlassian` server in a local Docker container so Jira and Confluence tools are available to the agent. The user sets `JIRA_USERNAME` and `JIRA_API_TOKEN` in `<repo-root>/.compound-engineering/config.local.yaml` under the "Hive Based Configurations" stanza (or exports them in the shell so the Docker container picks them up at start); ce-setup never prompts for or stores the secret value. `JIRA_URL` defaults to the org-wide `https://chatous.atlassian.net` baked into the readiness script; override via the `JIRA_URL` env var for a different org. It is entirely optional — declining skips the whole phase.
+This phase sets up the `mcp-atlassian` server in a local Docker container so Jira and Confluence tools are available to the agent. `JIRA_USERNAME`, `JIRA_API_TOKEN`, and `GITHUB_PR_PREFIX_USERNAME` are **shell-profile environment variables** — they live in `~/.zshrc` (or `~/.bashrc`), not in `.compound-engineering/config.local.yaml`, because the mcp-atlassian Docker container is installed globally and reads the environment at start; a per-repo YAML file is invisible to it. ce-setup asks for each value and writes the export line itself. `JIRA_URL` defaults to the org-wide `https://chatous.atlassian.net` baked into the readiness script; override via the `JIRA_URL` env var for a different org. This phase is entirely optional — declining skips the whole phase.
 
 ### Step 8: Run the Atlassian MCP readiness check
 
@@ -129,27 +129,46 @@ This runs mcp-atlassian in a local container and wires it into opencode.
 
 If the user declines, skip the rest of this phase. If the user accepts, continue.
 
-### Step 10: Verify Atlassian credentials are valid
+### Step 10: Collect and export credentials to the shell profile
 
-The readiness check in Step 8 already attempted an authenticated GET to the Jira `/myself` endpoint using `JIRA_URL`, `JIRA_USERNAME`, and `JIRA_API_TOKEN`. If that probe returned 200, the credentials are valid and the account is reachable — continue to Step 11.
+The readiness check in Step 8 already attempted an authenticated GET to the Jira `/myself` endpoint using `JIRA_URL`, `JIRA_USERNAME`, and `JIRA_API_TOKEN`. If that probe returned 200, the credentials are valid and already exported — continue to Step 11.
 
-If the probe failed (401/403 = bad token, 404 = wrong URL, 000 = network error), or if `JIRA_USERNAME`/`JIRA_API_TOKEN` were unset, do not continue. Print guidance — never prompt for the secret value and never store it:
+If the probe failed or the vars were unset, collect each value one-by-one via the blocking question tool and write the export lines into the shell profile yourself. The shell profile is `~/.zshrc` (macOS default) or `~/.bashrc` (Linux); detect which by checking `$SHELL` — if `$SHELL` contains `zsh`, use `~/.zshrc`, otherwise `~/.bashrc`.
 
-```text
-Atlassian credentials could not be verified.
-Set these in .compound-engineering/config.local.yaml under
-"Hive Based Configurations" and export them in the shell so the
-mcp-atlassian container picks them up at start:
-  JIRA_USERNAME="your.email@company.com"
-  JIRA_API_TOKEN="your_atlassian_api_token"
-JIRA_URL defaults to https://chatous.atlassian.net (override via the
-JIRA_URL env var for a different org).
-Create a token at:
-  https://id.atlassian.com/manage-profile/security/api-tokens
-Restart your terminal (or source the profile) and run /ce-setup again.
+Ask for each of the three values one at a time (it's fine for the user to paste the token directly — it goes into their own shell profile, not into any repo file):
+
+1. **`GITHUB_PR_PREFIX_USERNAME`** — "Your GitHub username for branch naming (e.g. `shrey`)? This will be exported as `GITHUB_PR_PREFIX_USERNAME` in your shell profile."
+2. **`JIRA_USERNAME`** — "Your Atlassian email (e.g. `your.email@company.com`)? This will be exported as `JIRA_USERNAME` in your shell profile."
+3. **`JIRA_API_TOKEN`** — "Your Atlassian API token? Create one at https://id.atlassian.com/manage-profile/security/api-tokens. This will be exported as `JIRA_API_TOKEN` in your shell profile."
+
+For each value the user provides, run a single argv Bash command that appends the export line to the profile file:
+
+```bash
+printf '\nexport GITHUB_PR_PREFIX_USERNAME="%s"\n' "VALUE" >> ~/.zshrc
 ```
 
-If the probe succeeded but `JIRA_USERNAME` or `JIRA_API_TOKEN` was unset (the script skips the API call in that case and reports the vars as missing), stop with the same guidance.
+Do the same for `JIRA_USERNAME` and `JIRA_API_TOKEN`. After writing all three, source the profile so the current session picks them up:
+
+```bash
+source ~/.zshrc
+```
+
+If `JIRA_URL` is not already set and the user's org is the default (`chatous.atlassian.net`), also write `export JIRA_URL="https://chatous.atlassian.net"`. If the user specified a different org, write that URL.
+
+After sourcing, **re-run the readiness check** to confirm the `/myself` probe now returns 200. If it still fails (401/403 = bad token, 404 = wrong URL, 000 = network error), print guidance and stop:
+
+```text
+Atlassian credentials could not be verified after writing the exports.
+Likely causes:
+  401/403 = wrong JIRA_API_TOKEN or JIRA_USERNAME
+  404    = wrong JIRA_URL
+  000    = network error or malformed URL
+Create a new token at:
+  https://id.atlassian.com/manage-profile/security/api-tokens
+Edit the export lines in ~/.zshrc (or ~/.bashrc), save, then run:
+  source ~/.zshrc   # (or source ~/.bashrc)
+  /ce-setup
+```
 
 ### Step 11: Pull the Docker image if needed
 
@@ -159,13 +178,13 @@ If the readiness check reported the image as not pulled, pull it:
 docker pull ghcr.io/sooperset/mcp-atlassian:latest
 ```
 
-If Docker is not installed or not running, stop this phase and tell the user to install Docker (https://docs.docker.com/get-docker/) and rerun `/ce-setup`.
+Docker is a required tool (checked in Phase 1). If it is not installed or not running, stop this phase and tell the user to install Docker (https://docs.docker.com/get-docker/) and rerun `/ce-setup`.
 
 ### Step 12: Write the MCP server entry into opencode config
 
 The target is the user's global opencode config at `~/.config/opencode/opencode.json` (create it if missing; if `opencode.jsonc` exists instead, edit that). ce-setup adds an `mcp-atlassian` entry under the top-level `mcp` key without disturbing existing MCP servers or other config.
 
-The entry uses opencode's `{env:VAR}` substitution so the secret is read from the environment at runtime, never written into the config file:
+The entry uses opencode's `{env:VAR}` substitution so the secrets are read from the environment at runtime, never written into the config file:
 
 ```json
 {
@@ -191,7 +210,7 @@ The entry uses opencode's `{env:VAR}` substitution so the secret is read from th
 ```
 
 Notes for the agent:
-- `JIRA_USERNAME` and `JIRA_API_TOKEN` must be exported in the shell where opencode runs (set them in `.compound-engineering/config.local.yaml` under "Hive Based Configurations" as the source of truth, then export). `JIRA_URL` defaults to `https://chatous.atlassian.net` via the readiness script; here in the opencode entry it still uses `{env:JIRA_URL}` — if the user has not exported `JIRA_URL` themselves, tell them to set it (e.g. `export JIRA_URL=https://chatous.atlassian.net`) so the container resolves it at start. If any value is unset, the `{env:...}` resolves to empty and the container will fail to authenticate on first use.
+- `JIRA_USERNAME`, `JIRA_API_TOKEN`, and `GITHUB_PR_PREFIX_USERNAME` are exported in the shell profile (Step 10 wrote them). `JIRA_URL` defaults to `https://chatous.atlassian.net` via the readiness script; if the user did not set it themselves and the org is the default, Step 10 also wrote the `JIRA_URL` export. If any value is unset when the container starts, the `{env:...}` resolves to empty and the container will fail to authenticate on first use.
 - Use `jq` to merge the entry into an existing config non-destructively. If `jq` is unavailable, read the file as JSON, add the key, and write it back with proper formatting. Never overwrite the entire file; preserve all existing keys, comments (in `.jsonc`), and whitespace where feasible.
 - If the `mcp-atlassian` entry already exists, leave it unless the user asks to rewrite it.
 
