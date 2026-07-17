@@ -104,15 +104,14 @@ if [ -n "$missing" ]; then
   for v in $missing; do
     warn "$v is not set in the current environment"
   done
-  detail "Export them in your shell profile (~/.zshrc or ~/.bashrc),"
-  detail "or set them in .compound-engineering/config.local.yaml under"
-  detail "\"Hive Based Configurations\" and export from there so the"
-  detail "mcp-atlassian container picks them up at start:"
+  detail "Export them in your shell profile (~/.zshrc or ~/.bashrc) so"
+  detail "the mcp-atlassian container picks them up at start:"
   detail '  export JIRA_USERNAME="your.email@company.com"'
   detail '  export JIRA_API_TOKEN="your_atlassian_api_token"'
   detail "Using JIRA_URL: $JIRA_URL (org default; override with the JIRA_URL env var)"
   detail "Create a token at:"
   detail "  https://id.atlassian.com/manage-profile/security/api-tokens"
+  detail "ce-setup Phase 3 can write these exports for you — just run /ce-setup."
 else
   ok "JIRA_URL, JIRA_USERNAME, and JIRA_API_TOKEN are all set"
   detail "Using JIRA_URL: $JIRA_URL"

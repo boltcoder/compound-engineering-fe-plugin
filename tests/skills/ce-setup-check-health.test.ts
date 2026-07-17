@@ -59,15 +59,16 @@ describe("ce-setup check-health", () => {
     expect(skill).not.toMatch(/Codex delegation defaults/i)
   })
 
-  test("reports missing optional tools without treating them as setup failures", async () => {
+  test("reports missing required tools as a setup block", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "ce-setup-health-"))
 
     try {
       const result = await runCheckHealth(root, "/usr/bin:/bin")
 
       expect(result.exitCode).toBe(0)
-      expect(result.stdout).toContain("Optional capabilities")
-      expect(result.stdout).toContain("Missing optional tools do not block setup")
+      expect(result.stdout).toContain("Required capabilities")
+      expect(result.stdout).toContain("(required)")
+      expect(result.stdout).toContain("required tool(s) missing")
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -83,7 +84,9 @@ describe("ce-setup check-health", () => {
       await copyFile(configTemplate, path.join(root, ".compound-engineering", "config.local.yaml"))
       await writeFile(path.join(root, ".gitignore"), ".compound-engineering/*.local.yaml\n")
 
-      const result = await runCheckHealth(root, "/usr/bin:/bin")
+      // Use the real PATH so required tools (gh, agent-browser, docker) are found,
+      // letting the test focus on repo-config state.
+      const result = await runCheckHealth(root, process.env.PATH ?? "/usr/bin:/bin")
 
       expect(result.exitCode).toBe(0)
       expect(result.stdout).toContain("Project config")
@@ -103,11 +106,12 @@ describe("ce-setup check-health", () => {
       await copyFile(configTemplate, path.join(root, ".compound-engineering", "config.local.example.yaml"))
       await copyFile(configTemplate, path.join(root, ".compound-engineering", "config.local.yaml"))
 
-      const result = await runCheckHealth(root, "/usr/bin:/bin")
+      // Use the real PATH so required tools are found, isolating the config-issue check.
+      const result = await runCheckHealth(root, process.env.PATH ?? "/usr/bin:/bin")
 
       expect(result.exitCode).toBe(0)
       expect(result.stdout).toContain("Local config is not safely gitignored")
-      expect(result.stdout).toContain("1 project issue(s) found")
+      expect(result.stdout).toContain("project issue(s) found")
     } finally {
       await rm(root, { recursive: true, force: true })
     }

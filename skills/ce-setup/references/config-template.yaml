@@ -61,10 +61,7 @@
 # =====================================================================
 # Hive Based Configurations
 # =====================================================================
-# Org-wide settings for the Hive team (chatous.atlassian.net). Set these
-# once per checkout; the plugin reads them from this file rather than the
-# environment. All keys are optional and fall through to documented
-# defaults.
+# Org-wide settings for the Hive team (chatous.atlassian.net).
 #
 # --- Jira capture (ce-brainstorm / ce-plan / ce-ideate / ce-commit-push-pr) ---
 # These skills ask for an optional Jira Ticket ID at intake. When provided,
@@ -89,18 +86,10 @@
 # conventional commits. Without a ticket, the existing feat/* branch +
 # conventional-only commit conventions are unchanged.
 #
-# PR prefix: set GITHUB_PR_PREFIX_USERNAME (below) to fix <pr-prefix>
-# deterministically. If unset, the skill infers it from existing local
-# branches via git for-each-ref and asks you to confirm.
-
-GITHUB_PR_PREFIX_USERNAME=
-
-# --- Atlassian account (read by ce-setup Phase 3, ce-jira-update) ---
-# Same credentials that ce-setup Phase 3 probes. ce-jira-update reads them
-# here for its read-only curl fallback when the mcp-atlassian MCP server is
-# not loaded. The MCP server itself reads these from the env at container
-# start (set by opencode.json); keeping them here too lets the skill's
-# curl fallback reach Jira without exporting them separately.
-
-JIRA_API_TOKEN=
-JIRA_USERNAME=
+# --- Credentials live in your shell profile, NOT here ---
+# JIRA_USERNAME, JIRA_API_TOKEN, and GITHUB_PR_PREFIX_USERNAME are exported
+# in ~/.zshrc (or ~/.bashrc) — /ce-setup Phase 3 writes them there for you.
+# The mcp-atlassian Docker container reads them from the environment at
+# start; a per-repo YAML file is invisible to a globally-installed server.
+# JIRA_URL defaults to https://chatous.atlassian.net (override via JIRA_URL
+# in your shell profile for a different org).

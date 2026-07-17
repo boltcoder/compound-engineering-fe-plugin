@@ -5,17 +5,21 @@
 set -o pipefail
 
 # =====================================================
-#  Optional capability config
+#  Required + optional capability config
 # =====================================================
 # Format: name|install_cmd|url|capability
+# Required tools block setup if missing; optional tools are reported only.
 
-deps=(
-  "agent-browser|CI=true npm install -g agent-browser --no-audit --no-fund --loglevel=error && agent-browser install|https://github.com/vercel-labs/agent-browser|browser testing, dogfood QA, and visual polish inspection"
+required_deps=(
   "gh|NONINTERACTIVE=1 HOMEBREW_NO_AUTO_UPDATE=1 brew install -q gh|https://cli.github.com|GitHub PR, issue, and review workflows"
+  "agent-browser|CI=true npm install -g agent-browser --no-audit --no-fund --loglevel=error && agent-browser install|https://github.com/vercel-labs/agent-browser|browser testing, dogfood QA, and visual polish inspection"
+  "docker|Install Docker Desktop (https://docs.docker.com/get-docker/)|https://docs.docker.com/get-docker/|Atlassian MCP server (mcp-atlassian) container runtime"
+)
+
+optional_deps=(
   "jq|NONINTERACTIVE=1 HOMEBREW_NO_AUTO_UPDATE=1 brew install -q jq|https://jqlang.github.io/jq/|JSON inspection in shell-based workflows"
   "ast-grep|NONINTERACTIVE=1 HOMEBREW_NO_AUTO_UPDATE=1 brew install -q ast-grep|https://ast-grep.github.io|syntax-aware structural code search"
   "ffmpeg|NONINTERACTIVE=1 HOMEBREW_NO_AUTO_UPDATE=1 brew install -q ffmpeg|https://ffmpeg.org/download.html|media chunking and screenshot extraction for Riffrec analysis"
-  "docker|Install Docker Desktop (https://docs.docker.com/get-docker/)|https://docs.docker.com/get-docker/|Atlassian MCP server (mcp-atlassian) container runtime"
 )
 
 # =====================================================
@@ -44,23 +48,39 @@ has_brew=$(command -v brew >/dev/null 2>&1 && echo "yes" || echo "no")
 in_repo=$(git rev-parse --is-inside-work-tree >/dev/null 2>&1 && echo "yes" || echo "no")
 
 # =====================================================
-#  Check optional capabilities
+#  Check required + optional capabilities
 # =====================================================
 
 capability_ok=0
 capability_total=0
 capability_missing=0
+required_missing=0
 results=()
 
-for entry in "${deps[@]}"; do
+# Required tools
+for entry in "${required_deps[@]}"; do
   IFS='|' read -r name install_cmd url capability <<< "$entry"
   capability_total=$((capability_total + 1))
   if command -v "$name" >/dev/null 2>&1; then
     capability_ok=$((capability_ok + 1))
-    results+=("$name|ok|$install_cmd|$url|$capability")
+    results+=("$name|ok|required|$install_cmd|$url|$capability")
   else
     capability_missing=$((capability_missing + 1))
-    results+=("$name|missing|$install_cmd|$url|$capability")
+    required_missing=$((required_missing + 1))
+    results+=("$name|missing|required|$install_cmd|$url|$capability")
+  fi
+done
+
+# Optional tools
+for entry in "${optional_deps[@]}"; do
+  IFS='|' read -r name install_cmd url capability <<< "$entry"
+  capability_total=$((capability_total + 1))
+  if command -v "$name" >/dev/null 2>&1; then
+    capability_ok=$((capability_ok + 1))
+    results+=("$name|ok|optional|$install_cmd|$url|$capability")
+  else
+    capability_missing=$((capability_missing + 1))
+    results+=("$name|missing|optional|$install_cmd|$url|$capability")
   fi
 done
 
@@ -110,14 +130,18 @@ if [ -n "$plugin_version" ]; then
   ok "Plugin version v${plugin_version}"
 fi
 
-section "Optional capabilities  ${capability_ok}/${capability_total}"
+section "Required capabilities  ${capability_ok}/${capability_total}"
 
 for result in "${results[@]}"; do
-  IFS='|' read -r name status install_cmd url capability <<< "$result"
+  IFS='|' read -r name status tier install_cmd url capability <<< "$result"
   if [ "$status" = "ok" ]; then
-    ok "$name -- $capability"
+    ok "$name ($tier) -- $capability"
   else
-    warn "$name -- unavailable: $capability"
+    if [ "$tier" = "required" ]; then
+      warn "$name ($tier) -- MISSING: $capability"
+    else
+      warn "$name ($tier) -- unavailable: $capability"
+    fi
     if [[ "$install_cmd" == *"brew install"* ]] && [ "$has_brew" != "yes" ]; then
       detail "$url"
     else
@@ -164,13 +188,17 @@ else
 fi
 
 echo ""
-if [ "$project_issues" -eq 0 ]; then
-  echo " ✅  Project config healthy. Optional capabilities available: ${capability_ok}/${capability_total}"
+if [ "$required_missing" -gt 0 ]; then
+  echo " ❌  ${required_missing} required tool(s) missing. Install them before continuing:"
+  echo "     gh, agent-browser, docker are required for this team's workflow."
+  echo "     Run /ce-setup again after installing them."
+elif [ "$project_issues" -eq 0 ]; then
+  echo " ✅  Project config healthy. Required capabilities available: ${capability_ok}/${capability_total}"
 else
-  echo " ⚠️   ${project_issues} project issue(s) found. Optional capabilities available: ${capability_ok}/${capability_total}"
+  echo " ⚠️   ${project_issues} project issue(s) found. Required capabilities available: ${capability_ok}/${capability_total}"
 fi
 
-if [ "$capability_missing" -gt 0 ]; then
+if [ "$capability_missing" -gt 0 ] && [ "$required_missing" -eq 0 ]; then
   echo "     Missing optional tools do not block setup; install them only for the workflows you use."
 fi
 
