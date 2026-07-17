@@ -30,6 +30,11 @@ git log origin/<base>..HEAD --oneline
 
 ### 3. Create the feature branch
 
+The branch name is chosen by the calling skill (Step 1 / Step 0.5 of `SKILL.md`):
+
+- **Jira ticket known** — `<pr-prefix>/<TICKET-ID>` (e.g. `shrey/HVD-9554`). The `<pr-prefix>` is resolved per Step 0.5 (env var > git-branch inference > ask). Do not derive from change content in this case.
+- **No ticket** — content-derived name following the existing `feat/*` convention.
+
 ```bash
 git checkout -b <branch-name> "$BASE_REF"
 ```

@@ -54,6 +54,8 @@ Follow this priority order:
 
 When using conventional commits, choose the type that most precisely describes the change (the type list above). Where `fix:` and `feat:` both seem to fit, default to `fix:`: a change that remedies broken or missing behavior is `fix:` even when implemented by adding code. Reserve `feat:` for capabilities the user could not previously accomplish. Other types remain primary when they fit better. The user may override for a specific change.
 
+**Jira-ticket prefixing (stacked on conventional).** Resolve a Jira ticket ID before composing the subject, in priority order: (1) current branch name match `^.*/([A-Z][A-Z0-9_]+-\d+)$` against `git branch --show-current`; (2) most recent commit subject match `^([A-Z][A-Z0-9_]+-\d+)\b` from `git log --oneline -10`; (3) empty. **Do not ask the user for a ticket ID** — `ce-commit` is the commit-only sibling; ticket capture happens upstream in `ce-brainstorm` / `ce-plan` / `ce-ideate`'s Phase 0.0a, and `ce-commit` only inherits. When a ticket ID resolves, the subject shape is `<TICKET-ID> <type>(<scope>): <subject>` (e.g. `HVD-9554 feat(ui): add borders to word boxes`). When no ticket resolves, the subject is the standard conventional-commits shape with no prefix token. The body is unaffected either way.
+
 ### Step 3: Consider logical commits
 
 Before staging everything together, scan the changed files for naturally distinct concerns. If modified files clearly group into separate logical changes (e.g., a refactor in one directory and a new feature in another, or test files for a different change than source files), create separate commits for each group.
@@ -65,7 +67,7 @@ Keep this lightweight:
 
 ### Step 4: Stage and commit
 
-If the current branch from the context above is `main`, `master`, or the resolved default branch from Step 1, automatically create a feature branch before committing. Derive the branch name from the change content, create it with `git checkout -b <branch-name>`, run `git branch --show-current` to confirm, and use the new branch as the current branch for the rest of the workflow. Do not ask whether to branch — committing on the default branch is not an option here.
+If the current branch from the context above is `main`, `master`, or the resolved default branch from Step 1, automatically create a feature branch before committing. Derive the branch name from the change content, create it with `git checkout -b <branch-name>`, run `git branch --show-current` to confirm, and use the new branch as the current branch for the rest of the workflow. Do not ask whether to branch — committing on the default branch is not an option here. **If a Jira ticket ID resolved in Step 2, the branch name is `<pr-prefix>/<TICKET-ID>` instead of a content-derived name.** Resolve `<pr-prefix>` in priority order: (1) `GITHUB_PR_PREFIX_USERNAME` env var (preferred); (2) `git for-each-ref --format='%(refname:short)' refs/heads/` inference + blocking-question confirm; (3) ask once. When no ticket resolved, keep the existing content-derived name.
 
 Write the commit message:
 - **Subject line**: Concise, imperative mood, focused on *why* not *what*. Follow the convention determined in Step 2.

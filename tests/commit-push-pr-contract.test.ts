@@ -79,6 +79,75 @@ describe("ce-commit-push-pr contract", () => {
       expect(template).toContain("auto_babysit")
     }
   })
+
+  test("wires Jira ticket ID resolution, branch naming, and stacked prefix", async () => {
+    const content = await readRepoFile("skills/ce-commit-push-pr/SKILL.md")
+
+    // Step 0.5 exists and resolves a ticket ID from branch, commit, plan, or ask.
+    expect(content).toContain("Step 0.5: Resolve Jira ticket ID and PR prefix")
+    expect(content).toMatch(/Current branch name.*\[A-Z\]\[A-Z0-9_\]\+-\\d\+/s)
+    expect(content).toMatch(/Recent commit subject.*git log --oneline -10/s)
+    expect(content).toMatch(/Plan artifact frontmatter.*jira_ticket:/s)
+    expect(content).toMatch(/Blocking ask.*optional.*HVD-9554/s)
+
+    // PR_PREFIX resolution: env var preferred, git for-each-ref inference, ask.
+    expect(content).toContain("GITHUB_PR_PREFIX_USERNAME")
+    expect(content).toMatch(/git for-each-ref --format='\%\(refname:short\)' refs\/heads\//)
+    expect(content).toMatch(/Never silently take the first prefix when multiple distinct values appear/)
+
+    // Branch naming: <pr-prefix>/<TICKET-ID> when ticket known.
+    expect(content).toMatch(/branch name is `<pr-prefix>\/<TICKET-ID>`/)
+
+    // Stacked prefix shape on commits and PR titles — ticket ID is the leading token.
+    expect(content).toMatch(/Commit subject: `<TICKET-ID> <type>\(<scope>\): <subject>`/)
+    expect(content).toMatch(/PR title: `<TICKET-ID> <type>\(<scope>\): <subject>`/)
+    expect(content).toContain("HVD-9554 feat(ui): add matches preview popover")
+
+    // No-ticket path is the existing conventional-commits shape, unchanged.
+    expect(content).toMatch(/empty, commit\/PR formatting is the existing conventional-commits shape/)
+
+    // Inherited short-circuit: existing Jira-branch + PR skips the asks.
+    expect(content).toContain("Inherited short-circuit")
+  })
+
+  test("branch-creation reference ties branch naming to the Jira ticket path", async () => {
+    const content = await readRepoFile(
+      "skills/ce-commit-push-pr/references/branch-creation.md",
+    )
+
+    expect(content).toMatch(/Jira ticket known.*<pr-prefix>\/<TICKET-ID>/s)
+    expect(content).toMatch(/No ticket.*content-derived name/s)
+  })
+
+  test("ce-commit stacks the ticket prefix and inherits without asking", async () => {
+    const content = await readRepoFile("skills/ce-commit/SKILL.md")
+
+    // ce-commit inherits the ticket from branch / commit — it does NOT ask the user.
+    expect(content).toMatch(/Resolve a Jira ticket ID before composing the subject/)
+    expect(content).toMatch(/current branch name match.*\[A-Z\]\[A-Z0-9_\]\+-\\d\+/s)
+    expect(content).toMatch(/most recent commit subject match.*git log --oneline -10/s)
+    expect(content).toContain("Do not ask the user for a ticket ID")
+
+    // Stacked prefix shape mirrors ce-commit-push-pr.
+    expect(content).toMatch(/`<TICKET-ID> <type>\(<scope>\): <subject>`/)
+    expect(content).toContain("HVD-9554 feat(ui): add borders to word boxes")
+
+    // Branch creation from default uses <pr-prefix>/<TICKET-ID> when ticket known.
+    expect(content).toMatch(/branch name is `<pr-prefix>\/<TICKET-ID>` instead of a content-derived name/)
+    expect(content).toContain("GITHUB_PR_PREFIX_USERNAME")
+  })
+
+  test("config templates document the GITHUB_PR_PREFIX_USERNAME env var and Jira capture", async () => {
+    for (const p of [
+      "skills/ce-setup/references/config-template.yaml",
+      ".compound-engineering/config.local.example.yaml",
+    ]) {
+      const template = await readRepoFile(p)
+      expect(template).toContain("GITHUB_PR_PREFIX_USERNAME")
+      expect(template).toContain("jira_ticket")
+      expect(template).toMatch(/<pr-prefix>\/<TICKET-ID>/)
+    }
+  })
 })
 
 describe("PR concept teaching contract", () => {

@@ -47,16 +47,53 @@ The remote default branch returns something like `origin/main`; strip the `origi
 
 Branch routing:
 
-- **Detached HEAD** — automatically create a feature branch from the current `HEAD` before continuing. Derive the branch name from the change content, run `git checkout -b <branch-name>`, re-read `git branch --show-current`, and use that result for the rest of the workflow. Do not ask whether to create the branch — invoking the full commit/push/PR workflow is already confirmation that the work should become branch-backed. If the derived branch name already exists, choose a non-conflicting suffix or ask only if the conflict cannot be resolved safely.
-- **On default branch with work to do** (uncommitted, unpushed, or no upstream) — automatically create a feature branch (pushing the default directly is not supported). Derive a name from the change content and continue at Step 3, which handles branch creation safely. Do not ask whether to branch — committing on the default is not an option here.
+- **Detached HEAD** — automatically create a feature branch from the current `HEAD` before continuing. Derive the branch name from the change content, run `git checkout -b <branch-name>`, re-read `git branch --show-current`, and use that result for the rest of the workflow. Do not ask whether to create the branch — invoking the full commit/push/PR workflow is already confirmation that the work should become branch-backed. If the derived branch name already exists, choose a non-conflicting suffix or ask only if the conflict cannot be resolved safely. **If a Jira ticket ID resolved (Step 0.5), the branch name is `<pr-prefix>/<TICKET-ID>` (e.g. `shrey/HVD-9554`) — see Step 0.5 for prefix resolution. Do not derive from change content in that case.**
+- **On default branch with work to do** (uncommitted, unpushed, or no upstream) — automatically create a feature branch (pushing the default directly is not supported). Derive a name from the change content and continue at Step 3, which handles branch creation safely. Do not ask whether to branch — committing on the default is not an option here. **If a Jira ticket ID resolved (Step 0.5), the branch name is `<pr-prefix>/<TICKET-ID>` instead of a content-derived name.**
 - **On default branch with no work** — report no feature branch work and stop.
 - **Feature branch** — continue.
 
 If the PR check returned a non-empty array, do **not** blindly take index 0 — in a base repo with multiple forks, another contributor's PR can share the same branch name (`--head` filters by branch only, not `<owner>:<branch>`). Select the entry whose `headRepositoryOwner` and `headRefName` match the current head — the branch/fork this workflow is pushing. Note the URL and body from that entry (all entries are open — the check filtered `--state open`). If exactly one entry matches, use it; if multiple entries share the branch name from different owners and none can be confirmed as the current head's, treat it as ambiguous and stop/surface rather than acting on the wrong PR. Step 5 uses the URL to route between new-PR and existing-PR application. Step 4 uses the existing body as preservation context when rewriting.
 
+## Step 0.5: Resolve Jira ticket ID and PR prefix
+
+Resolve two session-scoped values before Step 2. Both are optional; their presence switches commit/PR formatting and branch naming.
+
+### `JIRA_TICKET_ID`
+
+Resolve in priority order, stopping at the first non-empty normalized value:
+
+1. **Current branch name** — match `^.*/([A-Z][A-Z0-9_]+-\d+)$` against `git branch --show-current`. The ticket is the trailing segment after the last `/`. If the branch itself *is* `<prefix>/<TICKET>` (the common case once this workflow created it), this resolves immediately.
+2. **Recent commit subject** — `git log --oneline -10` and match `^([A-Z][A-Z0-9_]+-\d+)\b` against each subject. The most recent match wins.
+3. **Plan artifact frontmatter** — if a recent `docs/plans/*.md` exists whose frontmatter carries an active (non-commented) `jira_ticket:` field matching the change topic, use its value.
+4. **Blocking ask (one-shot, optional)** — if none of the above resolved and the user has not explicitly declined, ask once via the platform's blocking question tool: "Jira Ticket ID? (blank = none, optional — example: `HVD-9554`)". A blank answer is the common case; do not press.
+5. **Empty** — no ticket. `JIRA_TICKET_ID=""`. The rest of the workflow follows the existing `feat/*` convention and conventional-commits subject shape unchanged.
+
+The captured ID is validated against `^[A-Z][A-Z0-9_]+-\d+$`; a mismatch is dropped to empty with a one-line note. The ID is purely session-scoped here — it is not written anywhere by this skill. It surfaces in commit subjects (Step 3), the PR title (Step 4), and the branch name (Steps 1 and 3) when present.
+
+### `PR_PREFIX`
+
+Resolved only when `JIRA_TICKET_ID` is non-empty (the prefix is meaningless without a ticket to attach to a branch).
+
+1. **`GITHUB_PR_PREFIX_USERNAME` env var (preferred)** — if set and non-empty, use it verbatim as `<pr-prefix>`. This is the unambiguous, portable answer; surface it in the config template and ce-setup documentation so users export it once. Do not require it — it is a convenience, not a gate.
+2. **`git for-each-ref` inference** — run `git for-each-ref --format='%(refname:short)' refs/heads/` and collect the `<segment>/` prefix from each branch. Tally distinct prefixes (e.g. `shrey/`, `alice/`); the most frequent non-default prefix is the likely candidate. **This is ambiguous** — present the top candidate(s) via the platform's blocking question tool with options to confirm, type a different value, or be told to export `GITHUB_PR_PREFIX_USERNAME`. Never silently take the first prefix when multiple distinct values appear; the user must confirm.
+3. **Ask** — if neither resolves, ask once via the blocking question tool: "PR branch prefix? (e.g. your GitHub username; export `GITHUB_PR_PREFIX_USERNAME` to skip this in future)".
+
+The resolved `<pr-prefix>` is used only to form the branch name `<pr-prefix>/<TICKET>` when Step 1 or Step 3 creates a branch. It is never written anywhere by this skill.
+
+### Inherited short-circuit
+
+If the current branch already matches `<something>/<TICKET>` and Step 1 found an existing PR for it, both values are resolved — skip the asks. The user is already on a Jira-branch with an open PR; this workflow only adds commits and optionally rewrites the description, so re-asking would be noise.
+
 ## Step 2: Determine conventions
 
 Match repo style for commit messages and PR titles (project instructions in context > recent commits > conventional commits as default). With conventional commits, default to `fix:` over `feat:` when ambiguous — adding code to remedy broken or missing behavior is `fix:`. Reserve `feat:` for capabilities the user could not previously accomplish. The user may override.
+
+**Jira-ticket prefixing (stacked on top of conventional).** When `JIRA_TICKET_ID` (Step 0.5) is non-empty, every commit subject and the PR title are prefixed with the ticket ID as the leading token, followed by the conventional subject. Shapes:
+
+- Commit subject: `<TICKET-ID> <type>(<scope>): <subject>` — e.g. `HVD-9554 feat(ui): add matches preview popover`
+- PR title: `<TICKET-ID> <type>(<scope>): <subject>` — e.g. `HVD-9554 feat(ui): add matches preview popover with search`
+
+The scope is optional and follows the same rules as without a ticket. When `JIRA_TICKET_ID` is empty, commit/PR formatting is the existing conventional-commits shape — no ticket token, no special handling. The PR-body reference style (`Fixes`, `Related to`, etc.) is unaffected by the ticket prefix; the prefix is a leading token for human scanning, not a tracker magic word.
 
 ## Step 3: Commit and push
 

@@ -57,3 +57,27 @@
 # (force the gate on for one run).
 
 # plan_skip_scoping_confirm: true   # true | false (default: false)
+
+# --- Jira ticket capture (ce-brainstorm / ce-plan / ce-ideate) ---
+# These three skills ask for an optional Jira Ticket ID at intake. When
+# provided, they fetch the ticket's description + comments as grounding
+# context and write jira_ticket: <ID> into the artifact's frontmatter so
+# downstream skills (ce-commit / ce-commit-push-pr / ce-jira-update) inherit
+# it. A blank answer is the common case; nothing is forced. Requires the
+# mcp-atlassian MCP server (configured via /ce-setup Phase 3) for the
+# fetch — without it, the ID is still captured but the ticket context is
+# skipped with a one-line note.
+#
+# Branch naming: when a Jira ticket is known, /ce-commit-push-pr and
+# /ce-commit create branches as <pr-prefix>/<TICKET-ID> (e.g.
+# shrey/HVD-9554). Export GITHUB_PR_PREFIX_USERNAME=<your-handle> to fix
+# <pr-prefix> deterministically; otherwise the skill infers it from existing
+# local branches and asks you to confirm. Commit subjects and PR titles are
+# prefixed with the ticket ID as the leading token (e.g.
+# "HVD-9554 feat(ui): add matches preview"), stacked on top of conventional
+# commits. Without a ticket, the existing feat/* branch + conventional-only
+# commit conventions are unchanged.
+#
+# GITHUB_PR_PREFIX_USERNAME is an environment variable, not a config key.
+# Export it in your shell:
+#   export GITHUB_PR_PREFIX_USERNAME=shrey
