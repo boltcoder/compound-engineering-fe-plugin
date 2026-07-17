@@ -32,7 +32,7 @@ const IDEATION_SECTIONS_BODY = readFileSync(
 // is markdown-only, so the menu's share/iterate slot is format-keyed to
 // "Open in browser" under html.
 function phase00Region(): string {
-  const start = SKILL_BODY.indexOf("#### 0.0")
+  const start = SKILL_BODY.indexOf("#### 0.0 Resolve Output Mode")
   expect(start, "ce-ideate SKILL.md is missing the Phase 0.0 Output Mode section.").toBeGreaterThan(-1)
   const end = SKILL_BODY.indexOf("#### 0.1", start)
   return SKILL_BODY.slice(start, end > start ? end : start + 4500)

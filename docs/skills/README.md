@@ -121,6 +121,14 @@ Invoked when a specific need arises — not part of any chain.
 
 ---
 
+## Jira Integration
+
+| Skill | Description |
+|-------|-------------|
+| [`/ce-jira-update`](./ce-jira-update.md) | After PR approval, append a layman description, overwrite the Test Behaviors field (`customfield_11643`), and transition the ticket to `Staging To QA` — manual invocation only, approval-gated |
+
+---
+
 ## See also
 
 For the top-level install and usage guide, see [`README.md`](../../README.md). Each skill's authoritative runtime spec is in `skills/<skill>/SKILL.md`.

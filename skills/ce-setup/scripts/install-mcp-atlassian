@@ -10,6 +10,10 @@ IMAGE="ghcr.io/sooperset/mcp-atlassian:latest"
 OPENCODE_GLOBAL="$HOME/.config/opencode/opencode.json"
 OPENCODE_GLOBALC="$HOME/.config/opencode/opencode.jsonc"
 
+# Org-wide default for this plugin's install (chatous.atlassian.net).
+# Overridable via the JIRA_URL env var for forks / other orgs.
+DEFAULT_JIRA_URL="https://chatous.atlassian.net"
+
 action="check"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -86,9 +90,13 @@ fi
 
 section "Atlassian account connectivity"
 
+# Fall back to the org default URL when JIRA_URL is unset. The default is
+# this plugin's install org (chatous.atlassian.net); other orgs export
+# JIRA_URL or fork the default above.
+JIRA_URL="${JIRA_URL:-$DEFAULT_JIRA_URL}"
+
 creds_ok="no"
 missing=""
-[ -z "$JIRA_URL" ] && missing="$missing JIRA_URL"
 [ -z "$JIRA_USERNAME" ] && missing="$missing JIRA_USERNAME"
 [ -z "$JIRA_API_TOKEN" ] && missing="$missing JIRA_API_TOKEN"
 
@@ -96,14 +104,18 @@ if [ -n "$missing" ]; then
   for v in $missing; do
     warn "$v is not set in the current environment"
   done
-  detail "Export all three in your shell profile (~/.zshrc or ~/.bashrc):"
-  detail '  export JIRA_URL="https://your-company.atlassian.net"'
+  detail "Export them in your shell profile (~/.zshrc or ~/.bashrc),"
+  detail "or set them in .compound-engineering/config.local.yaml under"
+  detail "\"Hive Based Configurations\" and export from there so the"
+  detail "mcp-atlassian container picks them up at start:"
   detail '  export JIRA_USERNAME="your.email@company.com"'
   detail '  export JIRA_API_TOKEN="your_atlassian_api_token"'
+  detail "Using JIRA_URL: $JIRA_URL (org default; override with the JIRA_URL env var)"
   detail "Create a token at:"
   detail "  https://id.atlassian.com/manage-profile/security/api-tokens"
 else
   ok "JIRA_URL, JIRA_USERNAME, and JIRA_API_TOKEN are all set"
+  detail "Using JIRA_URL: $JIRA_URL"
 
   if command -v curl >/dev/null 2>&1; then
     myself_url="${JIRA_URL%/}/rest/api/3/myself"

@@ -57,3 +57,50 @@
 # (force the gate on for one run).
 
 # plan_skip_scoping_confirm: true   # true | false (default: false)
+
+# =====================================================================
+# Hive Based Configurations
+# =====================================================================
+# Org-wide settings for the Hive team (chatous.atlassian.net). Set these
+# once per checkout; the plugin reads them from this file rather than the
+# environment. All keys are optional and fall through to documented
+# defaults.
+#
+# --- Jira capture (ce-brainstorm / ce-plan / ce-ideate / ce-commit-push-pr) ---
+# These skills ask for an optional Jira Ticket ID at intake. When provided,
+# they fetch the ticket's description + comments as grounding context and
+# write jira_ticket: <ID> into the artifact's frontmatter so downstream
+# skills inherit it. A blank answer is the common case; nothing is forced.
+# Requires the mcp-atlassian MCP server (configured via /ce-setup Phase 3)
+# for the fetch — without it, the ID is still captured but the ticket
+# context is skipped with a one-line note.
+#
+# Ticket ID normalization: the system accepts base IDs (HVD-9554), CI/CD
+# hash-suffix variants (HVD-9554#), and revision/hotfix suffixes
+# (HVD-9554-2, HVD-9554-hotfix) — the bare ticket ID is extracted for Jira
+# lookups while the suffix is preserved on the branch name so CI/CD
+# pipelines keep working.
+#
+# Branch naming: when a Jira ticket is known, /ce-commit-push-pr and
+# /ce-commit create branches as <pr-prefix>/<TICKET-ID> (with any suffix
+# preserved, e.g. shrey/HVD-9554# or shrey/HVD-9554-2). Commit subjects
+# and PR titles are prefixed with the bare ticket ID as the leading token
+# (e.g. "HVD-9554 feat(ui): add matches preview"), stacked on top of
+# conventional commits. Without a ticket, the existing feat/* branch +
+# conventional-only commit conventions are unchanged.
+#
+# PR prefix: set GITHUB_PR_PREFIX_USERNAME (below) to fix <pr-prefix>
+# deterministically. If unset, the skill infers it from existing local
+# branches via git for-each-ref and asks you to confirm.
+
+GITHUB_PR_PREFIX_USERNAME=
+
+# --- Atlassian account (read by ce-setup Phase 3, ce-jira-update) ---
+# Same credentials that ce-setup Phase 3 probes. ce-jira-update reads them
+# here for its read-only curl fallback when the mcp-atlassian MCP server is
+# not loaded. The MCP server itself reads these from the env at container
+# start (set by opencode.json); keeping them here too lets the skill's
+# curl fallback reach Jira without exporting them separately.
+
+JIRA_API_TOKEN=
+JIRA_USERNAME=
