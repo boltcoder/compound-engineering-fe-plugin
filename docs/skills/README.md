@@ -125,7 +125,7 @@ Invoked when a specific need arises — not part of any chain.
 
 | Skill | Description |
 |-------|-------------|
-| [`/ce-jira-update`](./ce-jira-update.md) | After PR approval, append a layman description and overwrite the Test Behaviors field (`customfield_11643`) on the Jira ticket resolved from the current branch — manual invocation only, approval-gated |
+| [`/ce-jira-update`](./ce-jira-update.md) | After PR approval, append a layman description, overwrite the Test Behaviors field (`customfield_11643`), and transition the ticket to `Staging To QA` — manual invocation only, approval-gated |
 
 ---
 

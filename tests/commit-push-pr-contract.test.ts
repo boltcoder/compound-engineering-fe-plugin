@@ -89,19 +89,30 @@ describe("ce-commit-push-pr contract", () => {
     expect(content).toMatch(/Recent commit subject.*git log --oneline -10/s)
     expect(content).toMatch(/Plan artifact frontmatter.*jira_ticket:/s)
     expect(content).toMatch(/Blocking ask.*optional.*HVD-9554/s)
+    // Ask prompt illustrates all three accepted forms (bare, CI/CD # suffix, revision/hotfix suffix).
+    expect(content).toContain("HVD-9554#")
+    expect(content).toContain("HVD-9554-2")
 
-    // PR_PREFIX resolution: env var preferred, git for-each-ref inference, ask.
+    // PR_PREFIX resolution: config key preferred, git for-each-ref inference, ask.
     expect(content).toContain("GITHUB_PR_PREFIX_USERNAME")
     expect(content).toMatch(/git for-each-ref --format='\%\(refname:short\)' refs\/heads\//)
     expect(content).toMatch(/Never silently take the first prefix when multiple distinct values appear/)
+    // Config key is the preferred resolution path (not env-var-only).
+    expect(content).toMatch(/GITHUB_PR_PREFIX_USERNAME` config key \(preferred\)/)
 
-    // Branch naming: <pr-prefix>/<TICKET-ID> when ticket known.
-    expect(content).toMatch(/branch name is `<pr-prefix>\/<TICKET-ID>`/)
+    // Branch naming: <pr-prefix>/<TICKET-or-TICKET-with-suffix> when ticket known (suffix preserved on the branch).
+    expect(content).toMatch(/branch name is `<pr-prefix>\/<TICKET-or-TICKET-with-suffix>`/)
 
-    // Stacked prefix shape on commits and PR titles — ticket ID is the leading token.
-    expect(content).toMatch(/Commit subject: `<TICKET-ID> <type>\(<scope>\): <subject>`/)
-    expect(content).toMatch(/PR title: `<TICKET-ID> <type>\(<scope>\): <subject>`/)
+    // Stacked prefix shape on commits and PR titles — the BARE ticket ID is the leading token.
+    expect(content).toMatch(/Commit subject: `<bare-TICKET-ID> <type>\(<scope>\): <subject>`/)
+    expect(content).toMatch(/PR title: `<bare-TICKET-ID> <type>\(<scope>\): <subject>`/)
     expect(content).toContain("HVD-9554 feat(ui): add matches preview popover")
+    // Bare ID is never the suffix-bearing variant in commit/PR titles.
+    expect(content).toMatch(/never the suffix-bearing variant/)
+
+    // Suffix normalization: # and -<alphanumeric-segment> stripped to bare ID; suffix preserved on branch only.
+    expect(content).toMatch(/Strip the trailing `#`/)
+    expect(content).toMatch(/strip a trailing `-<segment>`/)
 
     // No-ticket path is the existing conventional-commits shape, unchanged.
     expect(content).toMatch(/empty, commit\/PR formatting is the existing conventional-commits shape/)
@@ -115,36 +126,51 @@ describe("ce-commit-push-pr contract", () => {
       "skills/ce-commit-push-pr/references/branch-creation.md",
     )
 
-    expect(content).toMatch(/Jira ticket known.*<pr-prefix>\/<TICKET-ID>/s)
+    expect(content).toMatch(/Jira ticket known.*<pr-prefix>\/<TICKET-or-TICKET-with-suffix>/s)
     expect(content).toMatch(/No ticket.*content-derived name/s)
+    // Suffix preserved on the branch; bare ID prefixes commits/PR titles.
+    expect(content).toMatch(/suffix is preserved .*\*?\*?on the branch name/i)
   })
 
-  test("ce-commit stacks the ticket prefix and inherits without asking", async () => {
+  test("ce-commit stacks the ticket prefix, normalizes suffixes, and inherits without asking", async () => {
     const content = await readRepoFile("skills/ce-commit/SKILL.md")
 
     // ce-commit inherits the ticket from branch / commit — it does NOT ask the user.
     expect(content).toMatch(/Resolve a Jira ticket ID before composing the subject/)
-    expect(content).toMatch(/current branch name match.*\[A-Z\]\[A-Z0-9_\]\+-\\d\+/s)
-    expect(content).toMatch(/most recent commit subject match.*git log --oneline -10/s)
+    expect(content).toMatch(/current branch name.*\[A-Z\]\[A-Z0-9_\]\+-\\d\+/s)
+    expect(content).toMatch(/most recent commit subject.*git log --oneline -10/s)
     expect(content).toContain("Do not ask the user for a ticket ID")
 
-    // Stacked prefix shape mirrors ce-commit-push-pr.
-    expect(content).toMatch(/`<TICKET-ID> <type>\(<scope>\): <subject>`/)
+    // Suffix normalization mirrored: # and revision/hotfix suffixes stripped to bare ID.
+    expect(content).toContain("HVD-9554#")
+    expect(content).toContain("HVD-9554-2")
+    expect(content).toMatch(/normalized to the bare `HVD-9554`/)
+
+    // Stacked prefix shape uses the bare ID.
+    expect(content).toMatch(/`<bare-TICKET-ID> <type>\(<scope>\): <subject>`/)
     expect(content).toContain("HVD-9554 feat(ui): add borders to word boxes")
 
-    // Branch creation from default uses <pr-prefix>/<TICKET-ID> when ticket known.
-    expect(content).toMatch(/branch name is `<pr-prefix>\/<TICKET-ID>` instead of a content-derived name/)
+    // Branch creation from default uses <pr-prefix>/<TICKET-or-TICKET-with-suffix> when ticket known.
+    expect(content).toMatch(/branch name is `<pr-prefix>\/<TICKET-or-TICKET-with-suffix>` instead of a content-derived name/)
     expect(content).toContain("GITHUB_PR_PREFIX_USERNAME")
+    // Config key is the preferred path.
+    expect(content).toMatch(/GITHUB_PR_PREFIX_USERNAME` config key in `\.compound-engineering\/config\.local\.yaml` \(preferred/)
   })
 
-  test("config templates document the GITHUB_PR_PREFIX_USERNAME env var and Jira capture", async () => {
+  test("config templates use 'Hive Based Configurations' separator with the three keys", async () => {
     for (const p of [
       "skills/ce-setup/references/config-template.yaml",
       ".compound-engineering/config.local.example.yaml",
     ]) {
       const template = await readRepoFile(p)
-      expect(template).toContain("GITHUB_PR_PREFIX_USERNAME")
+      expect(template).toContain("Hive Based Configurations")
+      // All three keys are present as active (uncommented) config keys.
+      expect(template).toMatch(/^GITHUB_PR_PREFIX_USERNAME=$/m)
+      expect(template).toMatch(/^JIRA_API_TOKEN=$/m)
+      expect(template).toMatch(/^JIRA_USERNAME=$/m)
+      // jira_ticket frontmatter field is documented.
       expect(template).toContain("jira_ticket")
+      // Branch naming with suffix preservation is documented.
       expect(template).toMatch(/<pr-prefix>\/<TICKET-ID>/)
     }
   })

@@ -2,7 +2,7 @@
 
 > Update a Jira ticket's description and Test Behaviors field from the current branch's PR diff. Manual-only; checks PR approval first.
 
-`ce-jira-update` is the closer for a Jira-tracked PR: once a PR is approved, this skill reads the full branch diff, writes a layman-terms description appendix to the ticket, and fills the **Test Behaviors** custom field (`customfield_11643`) with concrete manual QA points covering each user-visible branch in the diff. It is the bridge between engineering work — committed in code, explained in the PR — and the two audiences who consume the ticket afterwards: non-technical stakeholders reading the description, and the manual QA team reading the test behaviors.
+`ce-jira-update` is the closer for a Jira-tracked PR: once a PR is approved, this skill reads the full branch diff, writes a layman-terms description appendix to the ticket, fills the **Test Behaviors** custom field (`customfield_11643`) with concrete manual QA points covering each user-visible branch in the diff, and transitions the ticket to **Staging To QA**. It is the bridge between engineering work — committed in code, explained in the PR — and the two audiences who consume the ticket afterwards: non-technical stakeholders reading the description, and the manual QA team reading the test behaviors.
 
 It is **manual-only** (`disable-model-invocation: true`) and never auto-dispatched by another skill. The approval gate (≥1 reviewer approval on the GitHub PR) is on by default and can be skipped with `gate:off` when needed.
 
@@ -14,7 +14,7 @@ It is **manual-only** (`disable-model-invocation: true`) and never auto-dispatch
 |----------|--------|
 | What does it do? | After PR approval, appends a layman description and overwrites the Test Behaviors field on the Jira ticket resolved from the current branch |
 | When to use it | After a PR has at least one approval, before merge, to close the loop with stakeholders and QA |
-| What it produces | Two updates on the Jira ticket: a `## What changed (from PR #<n>, <date>)` section appended to the description, and a fresh Test Behaviors block in `customfield_11643` |
+| What it produces | Three updates on the Jira ticket: a `## Updated Deliverable as shipped on <date>` section appended to the description, a fresh Test Behaviors block in `customfield_11643`, and a status transition to `Staging To QA` |
 | What it does not do | Transition ticket status, run tests, commit anything to the repo, or write to any tracker other than the resolved Jira ticket |
 
 ---
@@ -39,8 +39,8 @@ Two recurring gaps sit between an approved PR and a Jira ticket that's ready for
 3. **Gather the diff** — `git fetch` fresh base + `git diff <merge-base>...HEAD`, plus PR metadata via `gh pr view`.
 4. **Fetch the existing ticket** — `mcp-atlassian_jira_get_issue` for the full description and the existing Test Behaviors field text (so idempotency checks work).
 5. **Compose both updates** in one subagent dispatch — a generic subagent loaded with the bundled `references/agents/qa-test-extractor.md` persona reads the diff and returns both text blocks.
-6. **Idempotency check** — if the description already contains a `## What changed (from PR #<n>` section, or the Test Behaviors field references the same PR number, ask before replacing/overwriting.
-7. **Preview and apply** — blocking-question confirm, then two `mcp-atlassian_jira_update_issue` calls: one for the description (full new text, with the appendix spliced in), one for `customfield_11643` (full overwrite).
+6. **Idempotency check** — if the description already contains a `## Updated Deliverable as shipped on <date>` heading within ±7 days (same ship window), or the Test Behaviors field references the same PR number, ask before replacing/overwriting. Older `## Updated Deliverable` sections from prior ships are preserved.
+7. **Preview and apply** — blocking-question confirm, then three `mcp-atlassian` MCP calls: one `jira_update_issue` for the description (full new text, with the appendix spliced in), one `jira_update_issue` for `customfield_11643` (full overwrite), and one `jira_transition_issue` to move the ticket to `Staging To QA` (default on; opt out with `no-transition` or `jira_update_auto_transition: false`).
 
 ---
 
@@ -66,8 +66,9 @@ Reads can fall back to `curl` against the Jira REST API, but **writes go through
 
 The two fields have different update semantics:
 
-- **Description** is append-only. The existing description body is preserved; a new `## What changed (from PR #<number>, <YYYY-MM-DD>)` section is spliced in at the end. A prior section for the same PR number triggers a replace-or-cancel prompt, never a silent double-append.
+- **Description** is append-only. The existing description body is preserved; a new `## Updated Deliverable as shipped on <YYYY-MM-DD>` section is spliced in at the end. A prior `## Updated Deliverable` section within ±7 days (the same ship window) triggers a replace-or-cancel prompt, never a silent double-append. Older prior sections (a different ship date) are preserved as-is — they are prior deliverables.
 - **Test Behaviors** (`customfield_11643`) is full-overwrite. The field holds the authoritative QA list, so each run replaces it with the current diff's coverage. The idempotency check surfaces when a prior run already wrote for the same PR, and asks before overwriting — to prevent accidental loss of manual notes a human QA added.
+- **Ticket transition** to `Staging To QA` is on by default. The skill looks up the available transitions via `mcp-atlassian_jira_get_transitions` and calls `mcp-atlassian_jira_transition_issue` with the matching transition ID. If the transition is unavailable (ticket is already in that status, or the workflow doesn't permit it from the current status), it's skipped silently with a note in the report — never a hard failure. Opt out per-run with the `no-transition` token, or standing via `jira_update_auto_transition: false` in `.compound-engineering/config.local.yaml`.
 
 ---
 
@@ -97,7 +98,7 @@ A subagent reads the diff and returns:
 > - Permissions/sizing: popover width ~72vw, doesn't overflow viewport on small screens; height doesn't exceed ~80vh.
 > - Regression: other columns (class name, detect_* flags, substitutions) render unchanged; the table row click/edit flow still works.
 
-After you confirm the preview, the skill issues two `mcp-atlassian_jira_update_issue` calls — one for the description (append), one for `customfield_11643` (overwrite) — and prints the ticket URL and PR URL.
+After you confirm the preview, the skill issues three `mcp-atlassian` MCP calls — one for the description (append), one for `customfield_11643` (overwrite), and one to transition the ticket to `Staging To QA` — and prints the ticket URL and PR URL.
 
 ---
 
@@ -137,11 +138,12 @@ Skip `ce-jira-update` when:
 
 ## Configuration
 
-This skill honors one config key in `<repo-root>/.compound-engineering/config.local.yaml`:
+This skill honors two config keys in `<repo-root>/.compound-engineering/config.local.yaml` (under the "Hive Based Configurations" stanza):
 
 - `jira_update_approval_gate: false` — standing opt-out of the approval gate. Per-run override: `gate:off`. Default: on (any other value, missing key, or commented-out line means the gate fires).
+- `jira_update_auto_transition: false` — standing opt-out of the auto-transition to `Staging To QA`. Per-run override: `no-transition`. Default: on (any other value, missing key, or commented-out line means the transition fires when available).
 
-The Test Behaviors custom field (`customfield_11643`) and the Jira ticket pattern (`^[A-Z][A-Z0-9_]+-\d+$`) are **hardcoded org-wide constants**, not config. Override the field ID only via the `JIRA_TEST_BEHAVIORS_FIELD` env var when your org migrates field IDs.
+The Test Behaviors custom field (`customfield_11643`), the Jira ticket pattern (`^[A-Z][A-Z0-9_]+-\d+$`), and the org default `JIRA_URL` (`https://chatous.atlassian.net`) are **hardcoded org-wide constants**, not config. Override the field ID only via the `JIRA_TEST_BEHAVIORS_FIELD` env var when your org migrates field IDs, and override the URL via the `JIRA_URL` env var for a different org.
 
 ---
 

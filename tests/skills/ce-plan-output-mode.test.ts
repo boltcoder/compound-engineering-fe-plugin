@@ -56,7 +56,7 @@ describe("ce-plan output:html mode", () => {
     // config > default, with a pipeline
     // override. All three signals must be named so an agent reading the file
     // resolves correctly without consulting a reference.
-    const phaseStart = SKILL_BODY.indexOf("#### 0.0")
+    const phaseStart = SKILL_BODY.indexOf("#### 0.0 Resolve Output Mode")
     expect(
       phaseStart,
       "ce-plan SKILL.md no longer contains the Phase 0.0 anchor — Output Mode resolution was removed or moved without updating the test.",
@@ -121,7 +121,7 @@ describe("ce-plan output:html mode", () => {
     // flag-token. Both names must appear together in the parsing prose so a
     // future implementer doesn't generalize to "any <word>:<word> token" and
     // accidentally consume conventional commit prefixes.
-    const phaseStart = SKILL_BODY.indexOf("#### 0.0")
+    const phaseStart = SKILL_BODY.indexOf("#### 0.0 Resolve Output Mode")
     const phaseRegion = SKILL_BODY.slice(phaseStart, phaseStart + 4500)
     expect(
       /mode:/.test(phaseRegion) && /output:/.test(phaseRegion),
@@ -137,7 +137,7 @@ describe("ce-plan output:html mode", () => {
     // require an ACTIVE (non-commented) key, and name the failure mode so a
     // future maintainer doesn't loosen it back. We check the principle is
     // present, not a specific phrasing.
-    const phaseStart = SKILL_BODY.indexOf("#### 0.0")
+    const phaseStart = SKILL_BODY.indexOf("#### 0.0 Resolve Output Mode")
     const phaseRegion = SKILL_BODY.slice(phaseStart, phaseStart + 4500)
     expect(
       /active.*non-commented|non-commented.*key|lines starting with `#`.*comments|ignore commented/i.test(phaseRegion),
@@ -154,7 +154,7 @@ describe("ce-plan output:html mode", () => {
     // hardcoding "defaulting to md" in the unknown-value note is wrong when
     // step 2 (config) or step 4 (pipeline override) resolves to a different
     // value. The note must reflect the actual final value, not anticipate one.
-    const phaseStart = SKILL_BODY.indexOf("#### 0.0")
+    const phaseStart = SKILL_BODY.indexOf("#### 0.0 Resolve Output Mode")
     const phaseRegion = SKILL_BODY.slice(phaseStart, phaseStart + 4500)
     expect(
       /using <resolved_format>|reflect.*final.*mode|after final resolution|after steps 2-4|Do not hardcode `md`/i.test(phaseRegion),

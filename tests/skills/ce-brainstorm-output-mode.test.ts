@@ -38,7 +38,7 @@ describe("ce-brainstorm output:html mode", () => {
   })
 
   test("SKILL.md describes the Output Mode resolution inline", () => {
-    const phaseStart = SKILL_BODY.indexOf("#### 0.0")
+    const phaseStart = SKILL_BODY.indexOf("#### 0.0 Resolve Output Mode")
     expect(
       phaseStart,
       "ce-brainstorm SKILL.md is missing the Phase 0.0 Output Mode resolution section.",
@@ -78,7 +78,7 @@ describe("ce-brainstorm output:html mode", () => {
     // `brainstorm_output: md|html`" would match the commented examples in
     // the shipped config template. The fix is principle-level: require an
     // ACTIVE (non-commented) key.
-    const phaseStart = SKILL_BODY.indexOf("#### 0.0")
+    const phaseStart = SKILL_BODY.indexOf("#### 0.0 Resolve Output Mode")
     const phaseRegion = SKILL_BODY.slice(phaseStart, phaseStart + 4500)
     expect(
       /active.*non-commented|non-commented.*key|lines starting with `#`.*comments|ignore commented/i.test(phaseRegion),
@@ -94,7 +94,7 @@ describe("ce-brainstorm output:html mode", () => {
     // Parity with ce-plan side. Hardcoding "defaulting to md" misleads users
     // when config has set HTML. The note must reflect the actual resolved
     // OUTPUT_FORMAT after all precedence steps complete.
-    const phaseStart = SKILL_BODY.indexOf("#### 0.0")
+    const phaseStart = SKILL_BODY.indexOf("#### 0.0 Resolve Output Mode")
     const phaseRegion = SKILL_BODY.slice(phaseStart, phaseStart + 4500)
     expect(
       /using <resolved_format>|reflect.*final.*mode|after final resolution|after steps 2-4|Do not hardcode `md`/i.test(phaseRegion),
