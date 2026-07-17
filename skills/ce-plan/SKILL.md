@@ -67,6 +67,12 @@ A plan is ready when an implementer can start confidently without needing the pl
 
 ### Phase 0: Resume, Source, and Scope
 
+#### 0.0a Jira Ticket Intake (optional)
+
+Before any other phase, run the optional Jira ticket capture. Read `references/jira-ticket-context.md` and follow it. In short: ask once (platform blocking question tool) for an optional Jira Ticket ID; if provided, validate `^[A-Z][A-Z0-9_]+-\d+$`, fetch the ticket's description + comments via the `mcp-atlassian` MCP server (with a read-only `curl` fallback), carry a short summary into the dialogue, and set `JIRA_TICKET_ID`. **Resume shortcut:** if enriching a requirements-only unified plan whose frontmatter carries `jira_ticket:`, inherit that value instead of re-asking — `ce-plan` enriches in place and must not drop a ticket ID the brainstorm already captured. A blank answer is the common case and the rest of the skill proceeds unchanged. When a ticket is known, write `jira_ticket: <ID>` into the plan's frontmatter so `ce-commit-push-pr` and `ce-jira-update` can resolve it without re-asking.
+
+This phase is the only place `ce-plan` asks for a ticket ID; downstream skills pick it up from the plan artifact, branch name, or commit subject.
+
 #### 0.0 Resolve Output Mode
 
 Determine `OUTPUT_FORMAT` before any other phase fires. Output mode is **exclusive** — the plan is written as either markdown (`.md`) OR HTML (`.html`), never both. Precedence: in-prompt request > user-stated preference > config > default (`md`), with a hard pipeline-mode override.

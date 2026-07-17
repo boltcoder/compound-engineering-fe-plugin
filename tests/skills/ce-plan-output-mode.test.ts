@@ -185,7 +185,7 @@ describe("ce-plan output:html mode", () => {
   })
 
   test("Phase 0.0 points at format-rendering refs based on resolved value", () => {
-    const phaseStart = SKILL_BODY.indexOf("#### 0.0")
+    const phaseStart = SKILL_BODY.indexOf("#### 0.0 Resolve Output Mode")
     const phaseRegion = SKILL_BODY.slice(phaseStart, phaseStart + 4500)
     expect(
       /references\/markdown-rendering\.md|markdown-rendering\.md/i.test(phaseRegion),

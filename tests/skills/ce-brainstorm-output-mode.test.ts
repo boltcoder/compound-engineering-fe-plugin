@@ -106,7 +106,7 @@ describe("ce-brainstorm output:html mode", () => {
     // Asymmetric output is acceptable. ce-plan re-resolves its own
     // `plan_output` config independently. The SKILL.md should make this
     // explicit so users with mismatched config aren't surprised.
-    const phaseStart = SKILL_BODY.indexOf("#### 0.0")
+    const phaseStart = SKILL_BODY.indexOf("#### 0.0 Resolve Output Mode")
     const phaseRegion = SKILL_BODY.slice(phaseStart, phaseStart + 4500)
     expect(
       /does NOT auto-propagate|does not auto-propagate|re-resolves its own/i.test(phaseRegion),

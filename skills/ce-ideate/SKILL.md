@@ -61,6 +61,12 @@ Two overrides raise the whole ideation fleet to the ceiling tier: surprise-me mo
 
 When the subject, mode, and format are already clear from the prompt, resolve this phase in one pass and move on — the gates below exist for ambiguity, not ceremony.
 
+#### 0.0a Jira Ticket Intake (optional)
+
+Before any other phase, run the optional Jira ticket capture. Read `references/jira-ticket-context.md` and follow it. In short: ask once (platform blocking question tool) for an optional Jira Ticket ID; if provided, validate `^[A-Z][A-Z0-9_]+-\d+$`, fetch the ticket's description + comments via the `mcp-atlassian` MCP server (with a read-only `curl` fallback), carry a short summary into the dialogue, and set `JIRA_TICKET_ID`. If resuming an existing ideation doc whose frontmatter carries `jira_ticket:`, inherit that value instead of re-asking. A blank answer is the common case and the rest of the skill proceeds unchanged. When a ticket is known, the artifact's frontmatter gains `jira_ticket: <ID>` so `ce-commit-push-pr` and `ce-jira-update` can resolve it without re-asking.
+
+This phase is the only place `ce-ideate` asks for a ticket ID; downstream skills pick it up from the artifact, branch name, or commit subject.
+
 #### 0.0 Resolve Output Mode
 
 Determine `OUTPUT_FORMAT` for the ideation artifact this run might persist. Output mode is **exclusive** — the ideation doc is written as either HTML (`.html`) OR markdown (`.md`), never both. Precedence: in-prompt request > user-stated preference > config > default (`html`), with a hard pipeline-mode override.
