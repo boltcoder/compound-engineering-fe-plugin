@@ -144,6 +144,7 @@ const NAME_CHAR_BUDGET = 64
 
 const EXPECTED_USER_INVOKED_SKILLS = new Set([
   "ce-dogfood",
+  "ce-jira-update",
   "ce-polish",
   "ce-setup",
 ])

@@ -133,6 +133,7 @@ The plugin ships 24 skills. Specialist review, research, and workflow behavior l
 | [`/ce-simplify-code`](docs/skills/ce-simplify-code.md) | Simplify recent code changes |
 | [`/ce-polish`](docs/skills/ce-polish.md) | Start a dev server and iterate on UX polish |
 | [`/ce-dogfood`](docs/skills/ce-dogfood.md) | Hands-off diff-scoped browser QA of the active branch, with autonomous fixes |
+| [`/ce-jira-update`](docs/skills/ce-jira-update.md) | After PR approval, update the Jira ticket's description and Test Behaviors field from the branch diff |
 | [`/lfg`](docs/skills/lfg.md) | Full autonomous engineering workflow |
 
 ---
