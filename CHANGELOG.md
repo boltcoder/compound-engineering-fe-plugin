@@ -1,5 +1,22 @@
 # Changelog
 
+## [3.20.0](https://github.com/boltcoder/compound-engineering-fe-plugin/compare/v3.19.0...v3.20.0) (2026-07-17)
+
+
+### Features
+
+* **ce-jira-update:** add skill to update Jira description and Test Behaviors after PR approval ([#5](https://github.com/boltcoder/compound-engineering-fe-plugin/pull/5))
+* **intake:** add optional Jira ticket capture to ce-brainstorm, ce-plan, ce-ideate ([#5](https://github.com/boltcoder/compound-engineering-fe-plugin/pull/5))
+* **commit:** stack Jira ticket ID prefix on commits, PR titles, and branch names ([#5](https://github.com/boltcoder/compound-engineering-fe-plugin/pull/5))
+* **ce-setup:** add Atlassian MCP server (mcp-atlassian) Docker setup ([#4](https://github.com/boltcoder/compound-engineering-fe-plugin/pull/4))
+
+### Bug Fixes
+
+* **ce-setup:** move Hive configs out of env, default JIRA_URL to chatous.atlassian.net ([#5](https://github.com/boltcoder/compound-engineering-fe-plugin/pull/5))
+* **jira:** normalize CI/CD hash-suffix and revision/hotfix-suffix ticket IDs ([#5](https://github.com/boltcoder/compound-engineering-fe-plugin/pull/5))
+* **ce-jira-update:** rename description heading, auto-transition to Staging To QA ([#5](https://github.com/boltcoder/compound-engineering-fe-plugin/pull/5))
+* **repo:** correct stale skill count and upstream references ([#6](https://github.com/boltcoder/compound-engineering-fe-plugin/pull/6))
+
 ## [3.13.1](https://github.com/EveryInc/compound-engineering-plugin/compare/cli-v3.13.0...cli-v3.13.1) (2026-06-17)
 
 
