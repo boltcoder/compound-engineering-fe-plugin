@@ -47,7 +47,7 @@ If the script is unavailable, perform the inline equivalent:
 
 Display the diagnostic output to the user. Missing optional tools are not setup failures.
 
-### Step 3: Decide Whether Fixes Are Needed
+### Step 3: Decide Whether Repo-Local Fixes Are Needed
 
 Proceed to Phase 2 only if one or more repo-local project issues exist:
 
@@ -55,16 +55,7 @@ Proceed to Phase 2 only if one or more repo-local project issues exist:
 - `.compound-engineering/config.local.yaml` exists but is not safely gitignored
 - `.compound-engineering/config.local.example.yaml` is missing or outdated
 
-If no project issues exist, report:
-
-```text
-✅ Compound Engineering setup complete
-
-Project config: ✅
-Optional capabilities: see diagnostic report above
-
-Run /ce-setup anytime to re-check.
-```
+If no project issues exist, proceed directly to Phase 3 (Atlassian MCP). Do not stop early — the Atlassian MCP check always runs.
 
 If optional tools are missing, do not offer a bulk install. The diagnostic already printed the relevant install command or project URL. Say: "Install optional tools only for the workflows you use."
 
@@ -109,16 +100,109 @@ If `.compound-engineering/config.local.yaml` exists and is not covered by `.giti
 
 Append the entry to the repo-root `.gitignore` only if the user approves. Do not overwrite unrelated `.gitignore` content.
 
-## Phase 3: Summary
+## Phase 3: Atlassian MCP Server (optional)
+
+This phase sets up the `mcp-atlassian` server in a local Docker container so Jira and Confluence tools are available to the agent. The user must export `JIRA_URL`, `JIRA_USERNAME`, and `JIRA_API_TOKEN` on their own system; ce-setup never prompts for or stores the secret value. It is entirely optional — declining skips the whole phase.
+
+### Step 8: Run the Atlassian MCP readiness check
+
+Set `SKILL_DIR` to the absolute directory you loaded this `SKILL.md` from:
+
+```bash
+SKILL_DIR="<absolute path of the directory containing this SKILL.md>";
+if [ -f "$SKILL_DIR/scripts/install-mcp-atlassian" ]; then bash "$SKILL_DIR/scripts/install-mcp-atlassian"; else echo "Bundled script not found at $SKILL_DIR/scripts/install-mcp-atlassian; skipping Atlassian MCP phase."; fi
+```
+
+Display the output to the user. The script reports four readiness dimensions: Docker running, image pulled, Atlassian account reachable (authenticated GET to Jira `/myself` using `JIRA_URL` + `JIRA_USERNAME` + `JIRA_API_TOKEN`), and opencode MCP config present.
+
+### Step 9: Ask Whether to Set Up Atlassian MCP
+
+Ask the user:
+
+```text
+Set up the Atlassian MCP server (Jira + Confluence) via Docker?
+This runs mcp-atlassian in a local container and wires it into opencode.
+
+1. Yes, set it up
+2. No thanks
+```
+
+If the user declines, skip the rest of this phase. If the user accepts, continue.
+
+### Step 10: Verify Atlassian credentials are valid
+
+The readiness check in Step 8 already attempted an authenticated GET to the Jira `/myself` endpoint using `JIRA_URL`, `JIRA_USERNAME`, and `JIRA_API_TOKEN`. If that probe returned 200, the credentials are valid and the account is reachable — continue to Step 11.
+
+If the probe failed (401/403 = bad token, 404 = wrong URL, 000 = network error), or if any of the three env vars were unset, do not continue. Print guidance — never prompt for the secret value and never store it:
+
+```text
+Atlassian credentials could not be verified.
+The script needs all three exported:
+  JIRA_URL="https://your-company.atlassian.net"
+  JIRA_USERNAME="your.email@company.com"
+  JIRA_API_TOKEN="your_atlassian_api_token"
+Create a token at:
+  https://id.atlassian.com/manage-profile/security/api-tokens
+Restart your terminal (or source the profile) and run /ce-setup again.
+```
+
+If the probe succeeded but `JIRA_URL` or `JIRA_USERNAME` was unset (the script skips the API call in that case and reports the vars as missing), stop with the same guidance.
+
+### Step 11: Pull the Docker image if needed
+
+If the readiness check reported the image as not pulled, pull it:
+
+```bash
+docker pull ghcr.io/sooperset/mcp-atlassian:latest
+```
+
+If Docker is not installed or not running, stop this phase and tell the user to install Docker (https://docs.docker.com/get-docker/) and rerun `/ce-setup`.
+
+### Step 12: Write the MCP server entry into opencode config
+
+The target is the user's global opencode config at `~/.config/opencode/opencode.json` (create it if missing; if `opencode.jsonc` exists instead, edit that). ce-setup adds an `mcp-atlassian` entry under the top-level `mcp` key without disturbing existing MCP servers or other config.
+
+The entry uses opencode's `{env:VAR}` substitution so the secret is read from the environment at runtime, never written into the config file:
+
+```json
+{
+  "mcp": {
+    "mcp-atlassian": {
+      "type": "local",
+      "command": [
+        "docker", "run", "-i", "--rm",
+        "-e", "JIRA_URL",
+        "-e", "JIRA_USERNAME",
+        "-e", "JIRA_API_TOKEN",
+        "ghcr.io/sooperset/mcp-atlassian:latest"
+      ],
+      "enabled": true,
+      "environment": {
+        "JIRA_URL": "{env:JIRA_URL}",
+        "JIRA_USERNAME": "{env:JIRA_USERNAME}",
+        "JIRA_API_TOKEN": "{env:JIRA_API_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+Notes for the agent:
+- `JIRA_URL` and `JIRA_USERNAME` must also be exported by the user (e.g. `https://your-company.atlassian.net` and `you@company.com`). If they are unset, the `{env:...}` resolves to empty and the container will fail to authenticate on first use — tell the user to export them alongside the token.
+- Use `jq` to merge the entry into an existing config non-destructively. If `jq` is unavailable, read the file as JSON, add the key, and write it back with proper formatting. Never overwrite the entire file; preserve all existing keys, comments (in `.jsonc`), and whitespace where feasible.
+- If the `mcp-atlassian` entry already exists, leave it unless the user asks to rewrite it.
+
+## Phase 4: Summary
 
 Display a brief summary:
 
 ```text
 ✅ Compound Engineering setup complete
 
-Fixed:     <repo-local fixes applied, or none>
-Skipped:   <repo-local fixes declined, or none>
-Optional:  <missing optional tools, or all available>
+Fixed:      <repo-local fixes applied, or none>
+Skipped:    <repo-local fixes declined, or none>
+Atlassian:  <mcp-atlassian status: configured | declined | blocked (reason) | not attempted>
+Optional:   <missing optional tools, or all available>
 
 Run /ce-setup anytime to re-check.
 ```

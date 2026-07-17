@@ -1,0 +1,199 @@
+#!/usr/bin/env bash
+# Atlassian MCP server (mcp-atlassian) Docker setup helper.
+# Checks Docker availability, image presence, Atlassian account connectivity
+# (JIRA_URL + JIRA_USERNAME + JIRA_API_TOKEN via the Jira /myself endpoint),
+# and existing opencode.json MCP config. Optionally pulls the Docker image.
+
+set -o pipefail
+
+IMAGE="ghcr.io/sooperset/mcp-atlassian:latest"
+OPENCODE_GLOBAL="$HOME/.config/opencode/opencode.json"
+OPENCODE_GLOBALC="$HOME/.config/opencode/opencode.jsonc"
+
+action="check"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --pull) action="pull"; shift ;;
+    *) shift ;;
+  esac
+done
+
+# =====================================================
+#  Helpers
+# =====================================================
+
+ok()      { echo "  🟢  $1"; }
+warn()    { echo "  🟡  $1"; }
+skip()    { echo "  ➖  $1"; }
+detail()  { echo "       $1"; }
+section() { echo ""; echo " $1"; }
+
+# =====================================================
+#  Docker availability
+# =====================================================
+
+section "Docker"
+
+docker_ok="no"
+if command -v docker >/dev/null 2>&1; then
+  if docker info >/dev/null 2>&1; then
+    ok "Docker is installed and running"
+    docker_ok="yes"
+  else
+    warn "Docker is installed but not running (start Docker Desktop or the daemon)"
+  fi
+else
+  warn "Docker is not installed"
+  detail "Install: https://docs.docker.com/get-docker/"
+fi
+
+# =====================================================
+#  Docker image
+# =====================================================
+
+section "mcp-atlassian image"
+
+image_ok="no"
+if [ "$docker_ok" = "yes" ]; then
+  if docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    ok "Image $IMAGE is available locally"
+    image_ok="yes"
+  else
+    if [ "$action" = "pull" ]; then
+      echo "       Pulling $IMAGE ..."
+      if docker pull "$IMAGE" 2>&1 | tail -1; then
+        ok "Image pulled successfully"
+        image_ok="yes"
+      else
+        warn "Failed to pull image"
+      fi
+    else
+      warn "Image not pulled yet (run with --pull or ce-setup will offer to pull)"
+      detail "docker pull $IMAGE"
+    fi
+  fi
+else
+  skip "Cannot check image without Docker"
+fi
+
+# =====================================================
+#  Atlassian account connectivity
+# =====================================================
+# Checks that JIRA_URL, JIRA_USERNAME, and JIRA_API_TOKEN are all set, then
+# makes an authenticated GET to the Jira /myself endpoint. A 200 response means
+# the credentials are valid and the account is reachable from this machine --
+# the real test that the mcp-atlassian container will be able to talk to Jira.
+
+section "Atlassian account connectivity"
+
+creds_ok="no"
+missing=""
+[ -z "$JIRA_URL" ] && missing="$missing JIRA_URL"
+[ -z "$JIRA_USERNAME" ] && missing="$missing JIRA_USERNAME"
+[ -z "$JIRA_API_TOKEN" ] && missing="$missing JIRA_API_TOKEN"
+
+if [ -n "$missing" ]; then
+  for v in $missing; do
+    warn "$v is not set in the current environment"
+  done
+  detail "Export all three in your shell profile (~/.zshrc or ~/.bashrc):"
+  detail '  export JIRA_URL="https://your-company.atlassian.net"'
+  detail '  export JIRA_USERNAME="your.email@company.com"'
+  detail '  export JIRA_API_TOKEN="your_atlassian_api_token"'
+  detail "Create a token at:"
+  detail "  https://id.atlassian.com/manage-profile/security/api-tokens"
+else
+  ok "JIRA_URL, JIRA_USERNAME, and JIRA_API_TOKEN are all set"
+
+  if command -v curl >/dev/null 2>&1; then
+    myself_url="${JIRA_URL%/}/rest/api/3/myself"
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+      -u "${JIRA_USERNAME}:${JIRA_API_TOKEN}" \
+      -H "Accept: application/json" \
+      --max-time 10 \
+      "$myself_url" 2>/dev/null || echo "000")
+
+    case "$http_code" in
+      200)
+        ok "Atlassian account reachable -- credentials are valid ($http_code)"
+        creds_ok="yes"
+        ;;
+      401|403)
+        warn "Authentication failed ($http_code) -- JIRA_API_TOKEN or JIRA_USERNAME is wrong"
+        detail "Create a new token at:"
+        detail "  https://id.atlassian.com/manage-profile/security/api-tokens"
+        detail "Endpoint tried: $myself_url"
+        ;;
+      404)
+        warn "JIRA_URL not found ($http_code) -- check the URL is your Atlassian Cloud base"
+        detail "  expected: https://your-company.atlassian.net"
+        detail "  got: $JIRA_URL"
+        ;;
+      000)
+        warn "Could not reach $JIRA_URL -- network/DNS error or URL is malformed"
+        detail "Verify JIRA_URL is a reachable Atlassian Cloud instance"
+        ;;
+      *)
+        warn "Unexpected response ($http_code) from $myself_url"
+        detail "The mcp-atlassian container may still work, but connectivity is unconfirmed"
+        ;;
+    esac
+  else
+    warn "curl is not available -- cannot verify account connectivity"
+    detail "Install curl, or check credentials manually against:"
+    detail "  ${JIRA_URL%/}/rest/api/3/myself"
+    ok "Credentials are set (connectivity not verified)"
+    creds_ok="yes"
+  fi
+fi
+
+# =====================================================
+#  opencode.json MCP config
+# =====================================================
+
+section "opencode MCP config"
+
+config_file=""
+for f in "$OPENCODE_GLOBAL" "$OPENCODE_GLOBALC"; do
+  [ -f "$f" ] && config_file="$f" && break
+done
+
+config_ok="no"
+if [ -n "$config_file" ]; then
+  if command -v jq >/dev/null 2>&1; then
+    if jq -e '.mcp["mcp-atlassian"]' "$config_file" >/dev/null 2>&1; then
+      ok "mcp-atlassian entry found in $config_file"
+      config_ok="yes"
+    else
+      warn "mcp-atlassian entry not found in $config_file"
+      detail "ce-setup will add it in the Atlassian MCP phase"
+    fi
+  else
+    skip "jq not available -- cannot inspect $config_file"
+    detail "Install jq or verify manually that mcp-atlassian is configured"
+  fi
+else
+  warn "No global opencode config found"
+  detail "Expected: $OPENCODE_GLOBAL"
+  detail "ce-setup will create it"
+fi
+
+# =====================================================
+#  Summary
+# =====================================================
+
+echo ""
+ready=0
+[ "$docker_ok" = "yes" ] && ready=$((ready + 1))
+[ "$image_ok" = "yes" ] && ready=$((ready + 1))
+[ "$creds_ok" = "yes" ] && ready=$((ready + 1))
+[ "$config_ok" = "yes" ] && ready=$((ready + 1))
+
+if [ "$ready" -eq 4 ]; then
+  echo " ✅  mcp-atlassian is fully configured ($ready/4)"
+elif [ "$ready" -eq 0 ]; then
+  echo " ❌  mcp-atlassian is not set up yet (0/4)"
+else
+  echo " ⚠️  mcp-atlassian partially ready ($ready/4)"
+fi
+echo ""

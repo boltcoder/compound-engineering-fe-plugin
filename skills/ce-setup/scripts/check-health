@@ -15,6 +15,7 @@ deps=(
   "jq|NONINTERACTIVE=1 HOMEBREW_NO_AUTO_UPDATE=1 brew install -q jq|https://jqlang.github.io/jq/|JSON inspection in shell-based workflows"
   "ast-grep|NONINTERACTIVE=1 HOMEBREW_NO_AUTO_UPDATE=1 brew install -q ast-grep|https://ast-grep.github.io|syntax-aware structural code search"
   "ffmpeg|NONINTERACTIVE=1 HOMEBREW_NO_AUTO_UPDATE=1 brew install -q ffmpeg|https://ffmpeg.org/download.html|media chunking and screenshot extraction for Riffrec analysis"
+  "docker|Install Docker Desktop (https://docs.docker.com/get-docker/)|https://docs.docker.com/get-docker/|Atlassian MCP server (mcp-atlassian) container runtime"
 )
 
 # =====================================================
