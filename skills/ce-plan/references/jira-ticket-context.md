@@ -10,15 +10,27 @@ Once per skill invocation, as the **first** intake step (Phase 0.0a — before o
 
 Use the platform's blocking question tool (`AskUserQuestion` in Claude Code — call `ToolSearch` with `select:AskUserQuestion` first; `request_user_input` in Codex; `ask_question` in Antigravity CLI (`agy`); `ask_user` in Pi). One question, single free-text answer:
 
-> Jira Ticket ID? (blank = none, this is optional — example: `HVD-9554`)
+> Jira Ticket ID? (blank = none, this is optional — examples: `HVD-9554`, `HVD-9554#`, or `HVD-9554-2`)
 
-The tool's free-text path covers blank and arbitrary input. Fall back to plain chat only when no blocking tool exists in the harness or the call errors — never silently skip the question.
+The three example shapes tell developers in this org that the system understands the variants they actually use (see "Ticket ID normalization" below). The tool's free-text path covers blank and arbitrary input. Fall back to plain chat only when no blocking tool exists in the harness or the call errors — never silently skip the question.
+
+## Ticket ID normalization
+
+This org uses two suffix conventions on top of the bare Jira ticket ID. The skill **always extracts the bare ID** for Jira lookups and for commit/PR-title prefixing; the suffix is preserved only on the branch name (so CI/CD pipelines that key off the suffix keep working).
+
+- **`#` suffix (CI/CD pipeline routing)** — `HVD-9554#` means "this branch is for the same ticket but routes through a particular CI/CD pipeline." The bare ID is `HVD-9554`. Some teams use this; the skill handles it transparently.
+- **Revision/hotfix suffix** — `HVD-9554-2`, `HVD-9554-hotfix`, `HVD-9554-followup` mean "a revised PR or hotfix for the same ticket." The bare ID is `HVD-9554`. Same ticket, second (or hotfix) PR.
+- **Bare** — `HVD-9554` is the base form.
+
+**Normalization rule.** Given any of these inputs, strip the trailing `#` (if present), then strip a trailing `-<segment>` where `<segment>` is alphanumeric (`2`, `hotfix`, `followup2`, …) and the part before the `-` is the bare ID `^[A-Z][A-Z0-9_]+-\d+$`. The result is the bare ID used everywhere — Jira `mcp-atlassian_jira_get_issue` calls, `jira_ticket:` frontmatter, and the leading token on commit subjects and PR titles. The branch name retains the original input verbatim (suffix included) so CI/CD pipeline routing keeps working.
+
+When normalization fails (input doesn't match any of the three forms), re-ask once with the validation error shown; a second mismatch falls back to blank and proceeds (do not loop).
 
 ## Validation and resolution
 
 - **Blank / "none" / "skip"**: no ticket. Set `JIRA_TICKET_ID=""` and proceed. The rest of the skill is unchanged; no Jira context is fetched, no artifact frontmatter is written for the ticket.
-- **Non-blank**: normalize to upper-case and validate against `^[A-Z][A-Z0-9_]+-\d+$` (the standard Jira project-key + issue-number shape). On mismatch, re-ask once with the validation error shown; a second mismatch falls back to blank and proceeds (do not loop).
-- **Resume shortcut**: if this skill is resuming an existing artifact (per the skill's own resume phase) and that artifact's YAML frontmatter carries an active `jira_ticket:` field, **do not re-ask** — inherit that value as `JIRA_TICKET_ID` and continue. A comment-prefixed `# jira_ticket:` line does not count (YAML comment).
+- **Non-blank**: normalize per the rule above to the bare ID, then validate the bare result against `^[A-Z][A-Z0-9_]+-\d+$`. On mismatch, re-ask once with the validation error shown; a second mismatch falls back to blank and proceeds (do not loop).
+- **Resume shortcut**: if this skill is resuming an existing artifact (per the skill's own resume phase) and that artifact's YAML frontmatter carries an active `jira_ticket:` field, **do not re-ask** — inherit that value as `JIRA_TICKET_ID` and continue. The frontmatter stores the **bare** ID (already normalized at capture time). A comment-prefixed `# jira_ticket:` line does not count (YAML comment).
 
 ## Fetching ticket context (only when an ID resolved)
 

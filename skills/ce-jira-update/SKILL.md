@@ -30,13 +30,13 @@ Discover via the platform's tool-discovery primitive (e.g. `ToolSearch` in Claud
 
 ### Step 1: Resolve the Jira ticket ID
 
-Resolve `JIRA_TICKET_ID` in priority order, stopping at the first non-empty normalized value:
+Resolve `JIRA_TICKET_ID` (the **bare** ID) in priority order, stopping at the first non-empty normalized value. This org uses two suffix conventions on top of the bare ID — `HVD-9554#` (CI/CD pipeline routing) and `HVD-9554-2` / `HVD-9554-hotfix` (revision/hotfix for the same ticket). Strip the trailing `#` (if present), then strip a trailing `-<alphanumeric-segment>` (when the part before the `-` is a bare ID) to get the bare ID used everywhere here. The branch name carries the suffix; Jira lookups and all writes use the bare ID.
 
-1. **Current branch name** — match `^.*/([A-Z][A-Z0-9_]+-\d+)$` against `git branch --show-current`. The ticket is the trailing segment after the last `/`.
-2. **Recent commit subject** — `git log --oneline -10` and match `^([A-Z][A-Z0-9_]+-\d+)\b` against each subject. Most recent match wins.
-3. **Plan artifact frontmatter** — a recent `docs/plans/*.md` with an active `jira_ticket:` field matching the change topic.
-4. **Blocking ask** — if none of the above resolved, ask once via the platform's blocking question tool: "Jira Ticket ID for this PR? (e.g. `HVD-9554`)". Unlike the optional intake in `ce-brainstorm` / `ce-plan` / `ce-ideate`, this ask is **required** — without a ticket there is nothing to update. On a blank answer, report "No Jira ticket could be resolved; nothing to update" and stop.
-5. **Validate** the resolved value against `^[A-Z][A-Z0-9_]+-\d+$`. A mismatch is reported and the skill stops.
+1. **Current branch name** — match `^.*/([A-Z][A-Z0-9_]+-\d+[A-Za-z0-9#_-]*)$` against `git branch --show-current`, then normalize per the rule above to the bare ID. Examples: `shrey/HVD-9554#` → `HVD-9554`; `shrey/HVD-9554-2` → `HVD-9554`.
+2. **Recent commit subject** — `git log --oneline -10` and match `^([A-Z][A-Z0-9_]+-\d+)\b` against each subject (commit subjects carry the bare ID per `ce-commit-push-pr` Step 2, so no stripping needed). Most recent match wins.
+3. **Plan artifact frontmatter** — a recent `docs/plans/*.md` with an active `jira_ticket:` field matching the change topic (frontmatter stores the bare ID).
+4. **Blocking ask** — if none of the above resolved, ask once via the platform's blocking question tool: "Jira Ticket ID for this PR? (examples: `HVD-9554`, `HVD-9554#`, or `HVD-9554-2`)". The three example shapes tell developers that the system handles CI/CD hash-suffix and revision/hotfix suffixes. Unlike the optional intake in `ce-brainstorm` / `ce-plan` / `ce-ideate`, this ask is **required** — without a ticket there is nothing to update. On a blank answer, report "No Jira ticket could be resolved; nothing to update" and stop.
+5. **Validate** the resolved bare ID against `^[A-Z][A-Z0-9_]+-\d+$`. A mismatch is reported and the skill stops.
 
 ### Step 2: Approval gate (optional, on by default)
 
@@ -88,10 +88,12 @@ Dispatch a generic subagent with `references/agents/qa-test-extractor.md` as the
 The appendix goes under a dated heading inside the Jira description:
 
 ```
-## What changed (from PR #<number>, <YYYY-MM-DD>)
+## Updated Deliverable as shipped on <YYYY-MM-DD>
 
 <2-6 short sentences describing user-visible behavior changes in layman terms>
 ```
+
+The heading does **not** carry the PR number — the "Updated Deliverable as shipped on `<date>`" framing is what non-technical stakeholders scan for, and the PR link lives in the body (not the heading). Date is the merge/ship date (use the current date at apply time; if the PR was already merged, use the merge date from `gh pr view --json mergedAt`).
 
 **Layman rule.** No file names, library names, component names, technical jargon, or implementation detail unless the ticket itself is a technical ticket (its `issuetype.name` is `Bug`/`Technical Task`/`Sub-task`/`Spike` or its existing description is visibly technical — code snippets, table names, API endpoints). For a feature ticket, lead with what the user now sees or can do that they couldn't before, and what's gone or changed. One idea per sentence.
 
@@ -119,36 +121,37 @@ What to test:
 
 Before previewing, check the existing ticket content:
 
-- **Description idempotency**: if the existing `description` already contains a heading matching `## What changed (from PR #<number>` (same PR number) from a prior run, surface it and ask whether to **replace** that section or **cancel**. Do not silently append a second section for the same PR. On `replace`, splice the new section in place of the old one; on `cancel`, stop without writing.
+- **Description idempotency**: if the existing `description` already contains a heading matching `## Updated Deliverable as shipped on <date>` whose date falls within ±7 days of today (a prior run for the same shipping window), surface it and ask whether to **replace** that section or **cancel**. Do not silently append a second "Updated Deliverable" section for the same ship. On `replace`, splice the new section in place of the old one; on `cancel`, stop without writing. Older "Updated Deliverable" sections (a prior ship on a different date) are preserved as-is — they are prior deliverables and are not touched.
 - **Test Behaviors idempotency**: if the existing `customfield_11643` already contains the string `(from PR #<number>` or references the same PR number, surface it and ask whether to **overwrite** the field or **cancel**. The Test Behaviors field holds the authoritative QA list, so overwrite is the common case; the prompt is there to prevent accidental loss of prior manual test notes that a human added.
 
 Ask the idempotency question(s) via the platform's blocking question tool. On `cancel` for either, stop entirely — do not write one and skip the other.
 
 ### Step 8: Preview and apply
 
-Print both composed blocks in chat — the description appendix heading + body, and the full Test Behaviors content as it will land in `customfield_11643` — then ask via the platform's blocking question tool: "Apply these updates to `<JIRA_TICKET_ID>`? (description appendix under `## What changed (from PR #<number>, <date>)`, Test Behaviors field updated)".
+Print both composed blocks in chat — the description appendix heading + body, and the full Test Behaviors content as it will land in `customfield_11643` — then ask via the platform's blocking question tool: "Apply these updates to `<JIRA_TICKET_ID>`? (description appendix under `## Updated Deliverable as shipped on <date>`, Test Behaviors field updated, ticket transitioned to `Staging To QA`)".
 
-On confirm, issue two MCP calls in order:
+On confirm, issue three MCP calls in order:
 
-1. **Description append/replace** — call `mcp-atlassian_jira_update_issue` with `issue_key: <JIRA_TICKET_ID>` and `fields: {"description": "<full new description — existing body spliced with the appendix section>"}`. Always send the full new description text (Jira's `update` replaces the field, not appends); reconstruct it by combining the existing description body (minus any prior `## What changed (from PR #<number>` section per Step 7's replace rule) with the new section appended at the end.
+1. **Description append/replace** — call `mcp-atlassian_jira_update_issue` with `issue_key: <JIRA_TICKET_ID>` and `fields: {"description": "<full new description — existing body spliced with the appendix section>"}`. Always send the full new description text (Jira's `update` replaces the field, not appends); reconstruct it by combining the existing description body (minus any prior `## Updated Deliverable as shipped on <date>` section within ±7 days per Step 7's replace rule; older prior deliverables are preserved) with the new section appended at the end.
 2. **Test Behaviors field** — call `mcp-atlassian_jira_update_issue` with `issue_key: <JIRA_TICKET_ID>` and `additional_fields: "{\"customfield_11643\": \"<full new Test Behaviors text>\"}"`. Send the full new text (overwrite, not merge).
+3. **Ticket transition** (default on) — call `mcp-atlassian_jira_get_transitions` with `issue_key: <JIRA_TICKET_ID>` to list available status transitions, find the transition whose target status is `Staging To QA` (match on `to.name == "Staging To QA"`), then call `mcp-atlassian_jira_transition_issue` with that `transition_id`. If no transition to `Staging To QA` exists (the ticket is already there, or the workflow doesn't permit it from the current status), skip the transition silently and note it in the report — never fail the whole skill because the status transition was unavailable. The transition is **on by default**; skip only when the user explicitly opts out via the `no-transition` token at invocation, or via `jira_update_auto_transition: false` in `<repo-root>/.compound-engineering/config.local.yaml` (active non-commented value of exactly `false` disables; missing key or any other value means **on**).
 
-On a successful apply of both, print a one-line summary: `Updated <JIRA_TICKET_ID> — description appendix + Test Behaviors field (customfield_11643).`
+On a successful apply of all calls, print a one-line summary: `Updated <JIRA_TICKET_ID> — description appendix + Test Behaviors field (customfield_11643) + transitioned to Staging To QA.` (omit the transition clause if it was skipped or opted out).
 
-On a partial failure (one call succeeds, the other errors), report which succeeded and which failed verbatim, and stop — do not retry the failed call automatically. Surface the MCP error message so the user can address it (`/ce-setup` re-run, MCP server restart, or manual Jira edit).
+On a partial failure (some calls succeed, others error), report which succeeded and which failed verbatim, and stop — do not retry the failed call automatically. Surface the MCP error message so the user can address it (`/ce-setup` re-run, MCP server restart, or manual Jira edit).
 
 ### Step 9: Report
 
 Print:
 - The Jira ticket URL: `https://<JIRA_URL>/browse/<JIRA_TICKET_ID>` (using `${JIRA_URL}` from the environment, not guessed).
 - The PR URL that the diff was sourced from.
-- A one-line note: `Description appended under "## What changed (from PR #<N>)". Test Behaviors field (customfield_11643) overwritten. Approved by: <approver login(s)>.`
+- A one-line note: `Description appended under "## Updated Deliverable as shipped on <date>". Test Behaviors field (customfield_11643) overwritten. Ticket transitioned to Staging To QA. Approved by: <approver login(s)>.` (omit the transition clause if skipped or opted out).
 
 No babysit handoff, no follow-up skill dispatch — this skill is terminal.
 
 ## What this skill does NOT do
 
 - Does not write to PR review comments, GitHub Issues, or any tracker other than the Jira ticket resolved in Step 1.
-- Does not transition the Jira ticket's status. Status transitions are a human/QA decision; this skill only updates the description and the Test Behaviors custom field.
+- **Transitions the ticket to `Staging To QA` by default** (Step 8, call #3). The transition is on unless the user explicitly opts out via the `no-transition` invocation token or `jira_update_auto_transition: false` in the config. If the transition is unavailable (already in that status, or the workflow doesn't permit it from the current status), it is skipped silently with a note in the report — never a hard failure.
 - Does not run tests. The Test Behaviors content is composed from the diff, not from test runs; if the diff introduces a behavior the tests do not cover, the QA team still gets a test point for it (that's the point).
 - Does not commit anything to the repository. The only writes are to Jira via the MCP server.

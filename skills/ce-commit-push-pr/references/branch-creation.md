@@ -32,7 +32,7 @@ git log origin/<base>..HEAD --oneline
 
 The branch name is chosen by the calling skill (Step 1 / Step 0.5 of `SKILL.md`):
 
-- **Jira ticket known** — `<pr-prefix>/<TICKET-ID>` (e.g. `shrey/HVD-9554`). The `<pr-prefix>` is resolved per Step 0.5 (env var > git-branch inference > ask). Do not derive from change content in this case.
+- **Jira ticket known** — `<pr-prefix>/<TICKET-or-TICKET-with-suffix>` (e.g. `shrey/HVD-9554`, `shrey/HVD-9554#`, or `shrey/HVD-9554-2`). The `<pr-prefix>` is resolved per Step 0.5 (config key > git-branch inference > ask). The suffix is preserved **on the branch name** so CI/CD pipelines that key off it keep working; the bare ID extracted from the branch is what prefixes commits and PR titles. Do not derive from change content in this case.
 - **No ticket** — content-derived name following the existing `feat/*` convention.
 
 ```bash
