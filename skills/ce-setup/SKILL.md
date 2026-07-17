@@ -102,7 +102,7 @@ Append the entry to the repo-root `.gitignore` only if the user approves. Do not
 
 ## Phase 3: Atlassian MCP Server (optional)
 
-This phase sets up the `mcp-atlassian` server in a local Docker container so Jira and Confluence tools are available to the agent. The user must export `JIRA_URL`, `JIRA_USERNAME`, and `JIRA_API_TOKEN` on their own system; ce-setup never prompts for or stores the secret value. It is entirely optional — declining skips the whole phase.
+This phase sets up the `mcp-atlassian` server in a local Docker container so Jira and Confluence tools are available to the agent. The user sets `JIRA_USERNAME` and `JIRA_API_TOKEN` in `<repo-root>/.compound-engineering/config.local.yaml` under the "Hive Based Configurations" stanza (or exports them in the shell so the Docker container picks them up at start); ce-setup never prompts for or stores the secret value. `JIRA_URL` defaults to the org-wide `https://chatous.atlassian.net` baked into the readiness script; override via the `JIRA_URL` env var for a different org. It is entirely optional — declining skips the whole phase.
 
 ### Step 8: Run the Atlassian MCP readiness check
 
@@ -113,7 +113,7 @@ SKILL_DIR="<absolute path of the directory containing this SKILL.md>";
 if [ -f "$SKILL_DIR/scripts/install-mcp-atlassian" ]; then bash "$SKILL_DIR/scripts/install-mcp-atlassian"; else echo "Bundled script not found at $SKILL_DIR/scripts/install-mcp-atlassian; skipping Atlassian MCP phase."; fi
 ```
 
-Display the output to the user. The script reports four readiness dimensions: Docker running, image pulled, Atlassian account reachable (authenticated GET to Jira `/myself` using `JIRA_URL` + `JIRA_USERNAME` + `JIRA_API_TOKEN`), and opencode MCP config present.
+Display the output to the user. The script reports four readiness dimensions: Docker running, image pulled, Atlassian account reachable (authenticated GET to Jira `/myself` using `JIRA_URL` + `JIRA_USERNAME` + `JIRA_API_TOKEN`; `JIRA_URL` falls back to `https://chatous.atlassian.net` when unset), and opencode MCP config present.
 
 ### Step 9: Ask Whether to Set Up Atlassian MCP
 
@@ -133,20 +133,23 @@ If the user declines, skip the rest of this phase. If the user accepts, continue
 
 The readiness check in Step 8 already attempted an authenticated GET to the Jira `/myself` endpoint using `JIRA_URL`, `JIRA_USERNAME`, and `JIRA_API_TOKEN`. If that probe returned 200, the credentials are valid and the account is reachable — continue to Step 11.
 
-If the probe failed (401/403 = bad token, 404 = wrong URL, 000 = network error), or if any of the three env vars were unset, do not continue. Print guidance — never prompt for the secret value and never store it:
+If the probe failed (401/403 = bad token, 404 = wrong URL, 000 = network error), or if `JIRA_USERNAME`/`JIRA_API_TOKEN` were unset, do not continue. Print guidance — never prompt for the secret value and never store it:
 
 ```text
 Atlassian credentials could not be verified.
-The script needs all three exported:
-  JIRA_URL="https://your-company.atlassian.net"
+Set these in .compound-engineering/config.local.yaml under
+"Hive Based Configurations" and export them in the shell so the
+mcp-atlassian container picks them up at start:
   JIRA_USERNAME="your.email@company.com"
   JIRA_API_TOKEN="your_atlassian_api_token"
+JIRA_URL defaults to https://chatous.atlassian.net (override via the
+JIRA_URL env var for a different org).
 Create a token at:
   https://id.atlassian.com/manage-profile/security/api-tokens
 Restart your terminal (or source the profile) and run /ce-setup again.
 ```
 
-If the probe succeeded but `JIRA_URL` or `JIRA_USERNAME` was unset (the script skips the API call in that case and reports the vars as missing), stop with the same guidance.
+If the probe succeeded but `JIRA_USERNAME` or `JIRA_API_TOKEN` was unset (the script skips the API call in that case and reports the vars as missing), stop with the same guidance.
 
 ### Step 11: Pull the Docker image if needed
 
@@ -188,7 +191,7 @@ The entry uses opencode's `{env:VAR}` substitution so the secret is read from th
 ```
 
 Notes for the agent:
-- `JIRA_URL` and `JIRA_USERNAME` must also be exported by the user (e.g. `https://your-company.atlassian.net` and `you@company.com`). If they are unset, the `{env:...}` resolves to empty and the container will fail to authenticate on first use — tell the user to export them alongside the token.
+- `JIRA_USERNAME` and `JIRA_API_TOKEN` must be exported in the shell where opencode runs (set them in `.compound-engineering/config.local.yaml` under "Hive Based Configurations" as the source of truth, then export). `JIRA_URL` defaults to `https://chatous.atlassian.net` via the readiness script; here in the opencode entry it still uses `{env:JIRA_URL}` — if the user has not exported `JIRA_URL` themselves, tell them to set it (e.g. `export JIRA_URL=https://chatous.atlassian.net`) so the container resolves it at start. If any value is unset, the `{env:...}` resolves to empty and the container will fail to authenticate on first use.
 - Use `jq` to merge the entry into an existing config non-destructively. If `jq` is unavailable, read the file as JSON, add the key, and write it back with proper formatting. Never overwrite the entire file; preserve all existing keys, comments (in `.jsonc`), and whitespace where feasible.
 - If the `mcp-atlassian` entry already exists, leave it unless the user asks to rewrite it.
 
