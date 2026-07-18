@@ -15,7 +15,8 @@ Subcommands:
   snapshot --pr N [--repo O/R] --state-dir DIR [--fetch-file F]
            Fetch (or load F), diff against on-disk state, persist the
            observed state atomically, emit the actionable set as JSON.
-  mark     --state-dir DIR (--thread ID --disposition needs-human|dispatched
+  mark     --state-dir DIR --invocation-id ID --session-started-at TIME
+           --invocation-budget-seconds N (--thread ID --disposition needs-human|dispatched
            | --comment ID --disposition needs-human|dispatched | --check KEY)
            Record that the agent acted on an item. A `dispatched` thread is
            re-emitted when a later reviewer comment moves its last-comment
@@ -72,9 +73,21 @@ STREAM_REVIEW = "review"
 # unseen for this many ticks.
 CHECK_HISTORY_TTL = 30
 
+# One invocation is a bounded monitoring shift, not the lifetime of the PR. Eight hours covers a
+# maximum-length GitHub-hosted Actions job (six hours) plus reaction and settle time. Callers may
+# choose another fixed value on the first snapshot; later commands must present the same value.
+DEFAULT_INVOCATION_BUDGET_SECONDS = 8 * 60 * 60
+
 
 class _WatchSuperseded(Exception):
     """Internal control flow: this watch lost ownership and must unwind immediately."""
+
+
+class _InvocationSuperseded(Exception):
+    """Internal control flow: this watch belongs to an invocation that was replaced."""
+
+    def __init__(self, current_invocation_id):
+        self.current_invocation_id = current_invocation_id
 
 
 def _now():
@@ -526,9 +539,11 @@ query($owner:String!,$repo:String!,$pr:Int!,$cursor:String){
 
 def _empty_state(pr, repo, url, now):
     owner, name = _split_repo(repo)
+    created_at = _iso(now)
     return {
         "pr": {"owner": owner, "repo": name, "number": pr, "url": url},
-        "head_sha": None, "tick": 0, "started_at": _iso(now),
+        "head_sha": None, "tick": 0, "state_created_at": created_at,
+        "started_at": created_at, "invocation_id": None, "invocation_budget_seconds": None,
         "checks": {}, "threads": {}, "ci_dispatched": {},
         "review_decision": None, "mergeable": None, "merge_state_status": None,
         "pr_chain": _default_pr_chain(),
@@ -858,6 +873,7 @@ def diff(state, cur, now=None, advance_trajectory=True):
     all_checks_ok = checks_terminal and not has_failing and bool(cur["checks"]) and awaiting_approval == 0
     blocked_external = (awaiting_approval > 0 and not has_failing and checks_terminal
                         and not actionable_threads and not actionable_feedback)
+    invocation_elapsed = _elapsed(state.get("started_at"), now)
 
     return {
         "pr_state": cur["pr_state"],
@@ -883,8 +899,19 @@ def diff(state, cur, now=None, advance_trajectory=True):
                    "comments": len(actionable_feedback), "needs_human": open_needs_human},
         "changed_this_tick": changed_this_tick,
         "quiet_seconds": quiet_seconds,
+        "invocation_id": state.get("invocation_id"),
+        "invocation_started_at": state.get("started_at"),
+        "invocation_elapsed_seconds": invocation_elapsed,
+        "invocation_budget_seconds": state.get("invocation_budget_seconds"),
+        "invocation_remaining_seconds": max(
+            0,
+            (state.get("invocation_budget_seconds") or 0) - invocation_elapsed,
+        ),
+        "persisted_state_created_at": state.get("state_created_at"),
+        "persisted_state_age_seconds": _elapsed(state.get("state_created_at"), now),
+        # Compatibility aliases for callers migrating from the original single-clock contract.
         "session_started_at": state.get("started_at"),
-        "session_seconds": _elapsed(state.get("started_at"), now),
+        "session_seconds": invocation_elapsed,
         "watch_generation": state.get("watch_generation"),
         "tick": state["tick"],
         "trajectory": trajectory,
@@ -957,6 +984,9 @@ def locked_state(state_dir, pr, repo, now):
                 state = json.load(f)
         else:
             state = _empty_state(pr, repo, None, now)
+        # Older state used `started_at` for both durable-state age and the active budget. Preserve
+        # that original value as the state birth time before a new invocation replaces the clock.
+        state.setdefault("state_created_at", state.get("started_at") or _iso(now))
         box = {"state": state}
         yield box
         tmp = tempfile.NamedTemporaryFile("w", dir=state_dir, delete=False)
@@ -976,33 +1006,96 @@ def _fetch_snapshot(args):
     return fetch(args.pr, args.repo)
 
 
+def _apply_invocation(box, args, now):
+    """Start explicitly, or reuse the one fixed clock named by an explicit invocation token."""
+    state = box["state"]
+    start_requested = bool(getattr(args, "start_invocation", False)
+                           or getattr(args, "reset_session", False))
+    continue_requested = bool(getattr(args, "continue_invocation", False))
+    invocation_id = getattr(args, "invocation_id", None)
+    requested_started_at = getattr(args, "session_started_at", None)
+    requested_budget = getattr(args, "invocation_budget_seconds", None)
+
+    if start_requested:
+        invocation_id = uuid.uuid4().hex
+        requested_started_at = _iso(now)
+        requested_budget = requested_budget or DEFAULT_INVOCATION_BUDGET_SECONDS
+        state["invocation_id"] = invocation_id
+        state["started_at"] = requested_started_at
+        state["invocation_budget_seconds"] = requested_budget
+        args.invocation_id = invocation_id
+        args.session_started_at = requested_started_at
+        args.invocation_budget_seconds = requested_budget
+        args._started_new_invocation = True
+        return
+
+    if not invocation_id:
+        raise SystemExit("pass --start-invocation on the first snapshot or --invocation-id to resume it")
+
+    if continue_requested:
+        if not requested_started_at or not requested_budget:
+            raise SystemExit("--continue-invocation requires its fixed start and budget")
+        if state.get("invocation_id") == invocation_id:
+            try:
+                same_anchor = (_parse_iso8601(state.get("started_at"))
+                               == _parse_iso8601(requested_started_at))
+            except (ValueError, TypeError):
+                same_anchor = False
+            if not same_anchor or state.get("invocation_budget_seconds") != requested_budget:
+                raise SystemExit("continuation cannot renew or extend an existing invocation")
+            return
+        state["invocation_id"] = invocation_id
+        state["started_at"] = requested_started_at
+        state["invocation_budget_seconds"] = requested_budget
+        return
+
+    persisted_id = state.get("invocation_id")
+    persisted_started_at = state.get("started_at")
+    persisted_budget = state.get("invocation_budget_seconds")
+    if persisted_id != invocation_id:
+        raise SystemExit("invocation token does not match persisted state; start or continue explicitly")
+    try:
+        anchors_match = (_parse_iso8601(persisted_started_at)
+                         == _parse_iso8601(requested_started_at))
+    except (ValueError, TypeError):
+        anchors_match = False
+    if not anchors_match:
+        raise SystemExit("invocation token does not match the persisted budget anchor")
+    if persisted_budget != requested_budget:
+        raise SystemExit("invocation token does not match the persisted fixed budget")
+
+
 def _apply_snapshot(box, args, cur, now, advance_trajectory):
     """Apply one fetched snapshot to a caller-owned locked state box."""
     if box["state"].get("pr", {}).get("url") is None and cur.get("url"):
         box["state"]["pr"]["url"] = cur["url"]
-    if getattr(args, "session_started_at", None):
-        # Carry one invocation-wide clock through watch re-arms and managed-stack layer state dirs.
-        box["state"]["started_at"] = args.session_started_at
-    elif getattr(args, "reset_session", False):
-        # A fresh babysit invocation starts the budget clock now. Without this, `started_at`
-        # persists from state creation, so resuming against day-old state would read
-        # session_seconds as huge and hand back before doing any work.
-        box["state"]["started_at"] = _iso(now)
+    _apply_invocation(box, args, now)
     return diff(box["state"], cur, now, advance_trajectory=advance_trajectory)
 
 
 def _run_snapshot(args, now, advance_trajectory=True, watch_generation=None):
     """One fetch -> diff -> persist. Returns the actionable/state dict."""
     cur = _fetch_snapshot(args)
+    if (getattr(args, "start_invocation", False)
+            or getattr(args, "reset_session", False)):
+        # A new invocation starts after preflight I/O; a slow first fetch must not consume its budget.
+        now = _now()
     with locked_state(args.state_dir, args.pr, args.repo, now) as box:
         if watch_generation is not None and box["state"].get("watch_generation") != watch_generation:
             raise _WatchSuperseded()
+        if (watch_generation is not None
+                and box["state"].get("invocation_id") != getattr(args, "invocation_id", None)):
+            raise _InvocationSuperseded(box["state"].get("invocation_id"))
         actionable, box["state"] = _apply_snapshot(box, args, cur, now, advance_trajectory)
     return actionable
 
 
 def cmd_snapshot(args):
-    print(json.dumps(_run_snapshot(args, _now()), indent=2))
+    result = _run_snapshot(args, _now())
+    if (getattr(args, "_started_new_invocation", False)
+            and _elapsed(result.get("invocation_started_at"), _now()) > 60):
+        raise SystemExit("new invocation unexpectedly inherited more than 60 seconds of elapsed time")
+    print(json.dumps(result, indent=2))
 
 
 def _wake_reason(a, settle_seconds):
@@ -1180,15 +1273,25 @@ def _watch_is_current(args, generation):
 
 def _emit_wake_if_current(args, generation, reason, **fields):
     """Serialize the final ownership check with takeover so an old generation cannot emit after
-    the new generation has become current. A wake emitted just before takeover is valid at emission
-    and will be recognized as stale against the next fresh snapshot."""
+    the new generation has become current. Invocation replacement also supersedes every ordinary
+    wake from the old budget, even when the replacement kept the same watch generation."""
     state_path = os.path.join(args.state_dir, "state.json")
     with _watch_lock(args.state_dir, exclusive=False):
         if not os.path.exists(state_path):
             return False
         with open(state_path) as f:
-            if json.load(f).get("watch_generation") != generation:
-                return False
+            state = json.load(f)
+        if state.get("watch_generation") != generation:
+            return False
+        current_invocation_id = state.get("invocation_id")
+        watcher_invocation_id = getattr(args, "invocation_id", None)
+        if current_invocation_id != watcher_invocation_id and reason != "invocation-superseded":
+            _emit_wake(
+                "invocation-superseded", watch_generation=generation,
+                superseded_invocation_id=watcher_invocation_id,
+                current_invocation_id=current_invocation_id,
+            )
+            return True
         _emit_wake(reason, watch_generation=generation, **fields)
         return True
 
@@ -1251,7 +1354,6 @@ def cmd_watch(args):
         if previous is None:
             superseded = True
             return
-        args.reset_session = False
         _terminate_replaced_watch(previous)
         interrupt_immediately = True
         if stop_requested.is_set():
@@ -1267,17 +1369,37 @@ def cmd_watch(args):
             if args.stop_file and os.path.exists(args.stop_file):
                 _emit_wake_if_current(args, generation, "stop-signal")
                 return
+            now = _now()
+            invocation_elapsed = _elapsed(actionable.get("invocation_started_at"), now)
+            budget = actionable.get("invocation_budget_seconds") or 0
+            actionable["invocation_elapsed_seconds"] = invocation_elapsed
+            actionable["invocation_remaining_seconds"] = max(0, budget - invocation_elapsed)
+            actionable["persisted_state_age_seconds"] = _elapsed(
+                actionable.get("persisted_state_created_at"), now)
             reason = _wake_reason(actionable, args.settle_seconds)
+            if reason in ("terminal", "merge-ready"):
+                _emit_wake_if_current(args, generation, reason, url=actionable.get("url"),
+                                      pr_state=actionable.get("pr_state"), counts=actionable.get("counts"))
+                return
+            if budget and invocation_elapsed >= budget:
+                _emit_wake_if_current(
+                    args, generation, "max-runtime", url=actionable.get("url"),
+                    invocation_id=actionable.get("invocation_id"),
+                    invocation_started_at=actionable.get("invocation_started_at"),
+                    invocation_elapsed_seconds=actionable.get("invocation_elapsed_seconds"),
+                    invocation_budget_seconds=budget,
+                    persisted_state_age_seconds=actionable.get("persisted_state_age_seconds"),
+                )
+                return
             if reason in ("needs-human", "blocked-failing", "blocked-external", "stack-blocked") and _blocker_sig(actionable) <= armed:
                 reason = None   # already-surfaced residual — keep watching, do not re-wake or terminate
             if reason:
                 _emit_wake_if_current(args, generation, reason, url=actionable.get("url"),
                                       pr_state=actionable.get("pr_state"), counts=actionable.get("counts"))
                 return
-            if args.max_runtime and actionable.get("session_seconds", 0) >= args.max_runtime:
-                _emit_wake_if_current(args, generation, "max-runtime", url=actionable.get("url"))
-                return
-            if stop_requested.wait(args.interval):
+            remaining = max(0, budget - invocation_elapsed) if budget else args.interval
+            wait_seconds = min(args.interval, remaining)
+            if stop_requested.wait(wait_seconds):
                 return
             if not _watch_is_current(args, generation):
                 superseded = True
@@ -1286,6 +1408,14 @@ def cmd_watch(args):
                                        watch_generation=generation)
     except _WatchSuperseded:
         superseded = True
+        return
+    except _InvocationSuperseded as exc:
+        superseded = True
+        _emit_wake_if_current(
+            args, generation, "invocation-superseded",
+            superseded_invocation_id=getattr(args, "invocation_id", None),
+            current_invocation_id=exc.current_invocation_id,
+        )
         return
     finally:
         interrupt_immediately = False
@@ -1319,6 +1449,7 @@ def _mark_thread_baseline(item_id, args, state):
 def cmd_mark(args):
     now = _now()
     with locked_state(args.state_dir, args.pr, args.repo, now) as box:
+        _apply_invocation(box, args, now)
         state = box["state"]
         if args.check:
             head = state.get("head_sha")
@@ -1360,15 +1491,30 @@ def main():
     s.add_argument("--state-dir", required=True)
     s.add_argument("--fetch-file", default=None)
     sg = s.add_mutually_exclusive_group()
-    sg.add_argument("--reset-session", action="store_true")  # start the budget clock (a fresh invocation)
-    sg.add_argument("--session-started-at", type=_session_started_at,
-                    help="carry a prior invocation's ISO-8601 budget anchor")
+    sg.add_argument("--start-invocation", action="store_true",
+                    help="mint one new fixed budget (first snapshot only)")
+    sg.add_argument("--reset-session", action="store_true",
+                    help=argparse.SUPPRESS)  # deprecated alias for --start-invocation
+    sg.add_argument("--continue-invocation", action="store_true",
+                    help="carry the current fixed budget into a managed-stack layer state dir")
+    s.add_argument("--invocation-id", default=None,
+                   help="token emitted by the first snapshot; required on every resume")
+    s.add_argument("--session-started-at", type=_session_started_at,
+                   help="fixed anchor emitted by the first snapshot; required for a new state dir")
+    s.add_argument("--invocation-budget-seconds", type=float,
+                   help=f"fixed total budget; first snapshot default {DEFAULT_INVOCATION_BUDGET_SECONDS}")
     s.set_defaults(func=cmd_snapshot)
 
     m = sub.add_parser("mark")
     m.add_argument("--pr", type=int, default=0)
     m.add_argument("--repo", default=None)
     m.add_argument("--state-dir", required=True)
+    m.add_argument("--invocation-id", required=True,
+                   help="token emitted by the invocation's first snapshot")
+    m.add_argument("--session-started-at", type=_session_started_at, required=True,
+                   help="fixed anchor emitted by the invocation's first snapshot")
+    m.add_argument("--invocation-budget-seconds", type=float, required=True,
+                   help="fixed budget emitted by the invocation's first snapshot")
     m.add_argument("--thread", default=None)
     # `open` re-actionizes a parked thread — the explicit re-open the SKILL prose relies on when a
     # parked stream's context materially changes (a human pushed, the check universe moved).
@@ -1384,17 +1530,33 @@ def main():
     w.add_argument("--repo", default=None)
     w.add_argument("--state-dir", required=True)
     w.add_argument("--interval", type=float, default=150.0, help="poll cadence seconds")
-    w.add_argument("--max-runtime", type=float, default=14400.0, help="hard stop seconds (0 = unbounded)")
     w.add_argument("--settle-seconds", type=float, default=300.0, help="quiet window before a merge-ready wake")
     w.add_argument("--stop-file", default=None, help="path whose existence stops the watch")
     w.add_argument("--fetch-file", default=None)
-    wg = w.add_mutually_exclusive_group()
-    wg.add_argument("--reset-session", action="store_true")
-    wg.add_argument("--session-started-at", type=_session_started_at,
-                    help="carry the invocation-wide ISO-8601 budget anchor")
+    w.add_argument("--invocation-id", required=True,
+                   help="token emitted by the invocation's first snapshot")
+    w.add_argument("--session-started-at", type=_session_started_at, required=True,
+                   help="fixed anchor emitted by the first snapshot")
+    w.add_argument("--invocation-budget-seconds", type=float, required=True,
+                   help="fixed budget emitted by the invocation's first snapshot")
     w.set_defaults(func=cmd_watch)
 
     args = p.parse_args()
+    if (args.cmd in ("snapshot", "watch")
+            and args.invocation_budget_seconds is not None
+            and args.invocation_budget_seconds <= 0):
+        p.error("--invocation-budget-seconds must be positive")
+    if args.cmd == "snapshot":
+        starting = args.start_invocation or args.reset_session
+        continuing = args.continue_invocation
+        if starting and (args.invocation_id or args.session_started_at):
+            p.error("the first snapshot cannot combine --start-invocation with resume fields")
+        if continuing and not (args.invocation_id and args.session_started_at
+                               and args.invocation_budget_seconds):
+            p.error("--continue-invocation requires --invocation-id, --session-started-at, and --invocation-budget-seconds")
+        if not starting and not continuing and not (args.invocation_id and args.session_started_at
+                                                     and args.invocation_budget_seconds):
+            p.error("snapshot requires --start-invocation or --invocation-id")
     args.func(args)
 
 
