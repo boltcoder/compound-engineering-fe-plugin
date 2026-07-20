@@ -3,7 +3,7 @@
  * Repeatable release pipeline for compound-engineering-fe-plugin.
  *
  * Usage:
- *   bun run scripts/release/release.ts --bump minor [--notes "..."] [--dry-run]
+ *   bun run scripts/release/release.ts --bump <patch|minor|major> [--notes "..."] [--recent-skills "skill-a,skill-b"] [--dry-run]
  *
  * What it does (in order):
  *   1. Validates: on main, clean tree, up to date with origin.
@@ -11,8 +11,13 @@
  *   3. Computes next version from --bump (patch|minor|major).
  *   4. Bumps version across all 8 plugin manifests + .release-please-manifest.json.
  *   5. Generates a CHANGELOG.md entry from git log since the last tag.
- *   6. Commits, tags (vX.Y.Z), pushes both.
- *   7. Creates a GitHub Release via `gh release create`.
+ *   6. Detects skills added since the previous MINOR release and emits a
+ *      "What's new in this release" section with a description + usage hint per skill.
+ *      Use --recent-skills to add skills that fall outside the auto-detection window.
+ *   7. Commits, tags (vX.Y.Z), pushes both.
+ *   8. Creates a GitHub Release via `gh release create`. The release body includes
+ *      a paste-ready upgrade prompt whose final step walks the user through every
+ *      new skill listed in the "What's new" section after /ce-setup finishes.
  *
  * --dry-run prints what would happen without writing or pushing.
  */
@@ -20,6 +25,12 @@
 import { execSync } from "node:child_process"
 import { readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
+import {
+  buildSkillEntries,
+  findNewSkillsBetweenRefs,
+  findPreviousMinorTag,
+  lookbackTagDisplay,
+} from "./skill-detection"
 
 // =====================================================
 //  Args
@@ -30,10 +41,12 @@ type BumpLevel = "patch" | "minor" | "major"
 function parseArgs(argv: string[]): {
   bump: BumpLevel | null
   notes: string | null
+  recentSkills: string[]
   dryRun: boolean
 } {
   let bump: BumpLevel | null = null
   let notes: string | null = null
+  let recentSkills: string[] = []
   let dryRun = false
 
   for (let i = 0; i < argv.length; i++) {
@@ -54,22 +67,35 @@ function parseArgs(argv: string[]): {
       i++
       continue
     }
+    if (arg === "--recent-skills") {
+      const val = argv[i + 1] ?? ""
+      recentSkills = val
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+      i++
+      continue
+    }
     if (arg === "--dry-run") {
       dryRun = true
       continue
     }
     if (arg === "--help" || arg === "-h") {
-      console.log("Usage: bun run scripts/release/release.ts --bump <patch|minor|major> [--notes \"...\"] [--dry-run]")
+      console.log(
+        "Usage: bun run scripts/release/release.ts --bump <patch|minor|major> [--notes \"...\"] [--recent-skills \"a,b\"] [--dry-run]",
+      )
       process.exit(0)
     }
   }
 
   if (!bump) {
-    console.error("Usage: bun run scripts/release/release.ts --bump <patch|minor|major> [--notes \"...\"] [--dry-run]")
+    console.error(
+      "Usage: bun run scripts/release/release.ts --bump <patch|minor|major> [--notes \"...\"] [--recent-skills \"a,b\"] [--dry-run]",
+    )
     process.exit(1)
   }
 
-  return { bump, notes, dryRun }
+  return { bump, notes, recentSkills, dryRun }
 }
 
 // =====================================================
@@ -189,7 +215,14 @@ function prependChangelog(entry: string): void {
   writeFileSync(CHANGELOG_FILE, newContent)
 }
 
-function generateConsumerUpgradeNotes(version: string): string {
+function generateConsumerUpgradeNotes(version: string, newSkills: string[]): string {
+  const onboardingStep =
+    newSkills.length > 0
+      ? `
+6. After /ce-setup finishes, walk me through each new skill shipped in this release. Use \`gh release view v${version} --json body --jq '.body'\` to read the release notes, find the "What's new in this release" section, and for every skill listed there tell me: (a) what it does in one line, (b) when to reach for it, (c) how to invoke it. Read \`docs/skills/<skill>.md\` for each so you can answer accurately, not from memory.
+7. When the walkthrough is done, confirm I have everything I need to start using the new skills in this project.`
+      : ""
+
   return `
 
 ---
@@ -211,9 +244,65 @@ Upgrade the compound-engineering-fe plugin to v${version} in this opencode insta
    }
 3. Restart opencode (close and reopen the session) so the new plugin ref is loaded.
 4. After restart, in any project, run /ce-setup. It will re-check for gh, agent-browser, and docker; then walk me through Jira setup — ask for my GitHub username, Atlassian email, and API token one by one, and write them to my shell profile. Have my API token ready (create one at https://id.atlassian.com/manage-profile/security/api-tokens).
-5. When /ce-setup finishes, confirm which tools and credentials are now in place and what (if anything) still needs to be installed manually.
+5. When /ce-setup finishes, confirm which tools and credentials are now in place and what (if anything) still needs to be installed manually.${onboardingStep}
 \`\`\`
 `
+}
+
+// =====================================================
+//  Skill auto-detection for "What's new in this release"
+// =====================================================
+
+function listAllTags(): string[] {
+  return run("git tag --sort=-version:refname", { capture: true })
+    .split("\n")
+    .filter(Boolean)
+}
+
+/**
+ * Generates the "What's new in this release" section by combining:
+ *   - Auto-detected skills: skills added since the previous MINOR release tag
+ *   - Manual override: skills listed in --recent-skills (added to the auto-detected set)
+ *
+ * Skills already documented in the most recent release tag's auto-detection are excluded
+ * via the lookback to the previous MINOR — so a skill introduced in v3.21.0 stays in
+ * "What's new" for all of v3.21.x and v3.22.x, then drops out when v3.23.0 ships.
+ *
+ * `currentRef` is the tag/ref whose preceding state defines "new since": typically
+ * the last release tag captured before the new tag was created. This avoids the
+ * self-referential bug where computing "new since lastTag" *after* creating the new
+ * tag returns "since the new tag" and finds nothing.
+ *
+ * Returns an empty section + empty skills list if there are no new skills to call out.
+ */
+function generateWhatsNewSection(
+  currentRef: string | null,
+  recentSkillsOverride: string[] = [],
+): { section: string; skills: string[] } {
+  if (!currentRef) return { section: "", skills: [] }
+
+  const allTags = listAllTags()
+  const previousMinorTag = findPreviousMinorTag(currentRef, allTags)
+  const lookbackRef = previousMinorTag ?? currentRef
+  const detected = findNewSkillsBetweenRefs(lookbackRef)
+
+  // Merge override (preserve order: detected first, then override)
+  const seen = new Set(detected)
+  const merged = [...detected]
+  for (const name of recentSkillsOverride) {
+    if (!seen.has(name)) {
+      merged.push(name)
+      seen.add(name)
+    }
+  }
+
+  if (merged.length === 0) return { section: "", skills: [] }
+
+  const entries = buildSkillEntries(merged)
+  const bullets = entries.map((e) => e.bullet).join("\n")
+  const section = `\n## What's new in this release\n\nAuto-detected new skills (since \`${lookbackTagDisplay(lookbackRef)}\`):\n\n${bullets}\n`
+
+  return { section, skills: merged }
 }
 
 // =====================================================
@@ -225,6 +314,9 @@ const dryRun = args.dryRun
 
 console.log(dryRun ? "=== DRY RUN ===" : "=== RELEASE PIPELINE ===")
 console.log(`Bump: ${args.bump}`)
+if (args.recentSkills.length > 0) {
+  console.log(`Recent skills override: ${args.recentSkills.join(", ")}`)
+}
 
 // 1. Validate git state
 console.log("\n1. Validating git state...")
@@ -309,10 +401,21 @@ run("git push origin main")
 run(`git push origin v${newVersion}`)
 console.log("   ✓ Pushed.")
 
-// 8. Create GitHub Release
-console.log(`\n8. Creating GitHub Release v${newVersion}...`)
-const consumerUpgrade = generateConsumerUpgradeNotes(newVersion)
-const releaseNotes = (args.notes ?? changelogEntry) + consumerUpgrade
+// 8. Detect new skills + generate "What's new" section
+// Use the `lastTag` captured in step 4 (before this tag was created) so we look back
+// from the right anchor — otherwise getLastTag() would now return v${newVersion} itself.
+console.log("\n8. Detecting new skills since previous minor release...")
+const whatsNew = generateWhatsNewSection(lastTag, args.recentSkills)
+if (whatsNew.skills.length > 0) {
+  console.log(`   ✓ Found ${whatsNew.skills.length} new skill(s): ${whatsNew.skills.join(", ")}`)
+} else {
+  console.log("   No new skills since previous minor release.")
+}
+
+// 9. Create GitHub Release
+console.log(`\n9. Creating GitHub Release v${newVersion}...`)
+const consumerUpgrade = generateConsumerUpgradeNotes(newVersion, whatsNew.skills)
+const releaseNotes = (args.notes ?? changelogEntry) + whatsNew.section + consumerUpgrade
 const tmpFile = path.join(require("node:os").tmpdir(), `ce-release-${newVersion}.md`)
 writeFileSync(tmpFile, releaseNotes)
 run(`gh release create v${newVersion} --title "v${newVersion}" --notes-file "${tmpFile}"`)
