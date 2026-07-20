@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.21.0](https://github.com/boltcoder/compound-engineering-fe-plugin/compare/v3.20.2...v3.21.0) (2026-07-20)
+
+### Features
+
+* feat(ce-fix-bugs): add Jira checklist driver skill (#10) (22b0f40)
+
+
 ## [3.20.2](https://github.com/boltcoder/compound-engineering-fe-plugin/compare/v3.20.1...v3.20.2) (2026-07-17)
 
 ### Features
