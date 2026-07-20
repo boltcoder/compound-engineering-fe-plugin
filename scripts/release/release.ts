@@ -31,75 +31,10 @@ import {
   findPreviousMinorTag,
   lookbackTagDisplay,
 } from "./skill-detection"
+import { parseArgs, printUsage, type BumpLevel } from "./cli"
 
 // =====================================================
-//  Args
-// =====================================================
-
-type BumpLevel = "patch" | "minor" | "major"
-
-function parseArgs(argv: string[]): {
-  bump: BumpLevel | null
-  notes: string | null
-  recentSkills: string[]
-  dryRun: boolean
-} {
-  let bump: BumpLevel | null = null
-  let notes: string | null = null
-  let recentSkills: string[] = []
-  let dryRun = false
-
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i]
-    if (arg === "--bump") {
-      const val = argv[i + 1]
-      if (val === "patch" || val === "minor" || val === "major") {
-        bump = val
-      } else {
-        console.error(`--bump must be patch|minor|major, got: ${val}`)
-        process.exit(1)
-      }
-      i++
-      continue
-    }
-    if (arg === "--notes") {
-      notes = argv[i + 1] ?? null
-      i++
-      continue
-    }
-    if (arg === "--recent-skills") {
-      const val = argv[i + 1] ?? ""
-      recentSkills = val
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-      i++
-      continue
-    }
-    if (arg === "--dry-run") {
-      dryRun = true
-      continue
-    }
-    if (arg === "--help" || arg === "-h") {
-      console.log(
-        "Usage: bun run scripts/release/release.ts --bump <patch|minor|major> [--notes \"...\"] [--recent-skills \"a,b\"] [--dry-run]",
-      )
-      process.exit(0)
-    }
-  }
-
-  if (!bump) {
-    console.error(
-      "Usage: bun run scripts/release/release.ts --bump <patch|minor|major> [--notes \"...\"] [--recent-skills \"a,b\"] [--dry-run]",
-    )
-    process.exit(1)
-  }
-
-  return { bump, notes, recentSkills, dryRun }
-}
-
-// =====================================================
-//  Helpers
+//  Args (parsed via ./cli for testability)
 // =====================================================
 
 function run(cmd: string, opts?: { capture?: boolean; cwd?: string }): string {
@@ -309,7 +244,15 @@ function generateWhatsNewSection(
 //  Main
 // =====================================================
 
-const args = parseArgs(process.argv.slice(2))
+const args = (() => {
+  try {
+    return parseArgs(process.argv.slice(2))
+  } catch (err) {
+    console.error((err as Error).message)
+    printUsage()
+    process.exit(1)
+  }
+})()
 const dryRun = args.dryRun
 
 console.log(dryRun ? "=== DRY RUN ===" : "=== RELEASE PIPELINE ===")
