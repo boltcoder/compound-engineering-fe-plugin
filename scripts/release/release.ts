@@ -194,36 +194,30 @@ function generateConsumerUpgradeNotes(version: string): string {
 
 ---
 
-## Upgrading
+## Use this prompt to upgrade
 
-### Step 1 — update the plugin ref and restart
+Copy the prompt below and paste it into any opencode session. The agent will pin the plugin ref, restart opencode, and run \`/ce-setup\` to walk you through Jira setup. Make sure the prerequisites are installed in your terminal first — the prompt does not install them.
 
-Edit \`~/.config/opencode/opencode.json\` and set the plugin array entry to pin this release:
-
-\`\`\`json
-{
-  "plugin": ["compound-engineering-fe@git+https://github.com/boltcoder/compound-engineering-fe-plugin.git#v${version}"]
-}
-\`\`\`
-
-Restart opencode.
-
-### Step 2 — run setup
-
-In any project, paste:
-
-\`\`\`
-/ce-setup
-\`\`\`
-
-It will check required tools (\`gh\`, \`agent-browser\`, \`docker\`), then walk you through Jira setup — it asks for your GitHub username, Atlassian email, and API token one by one and writes them to your shell profile automatically. Have your API token ready (create one at https://id.atlassian.com/manage-profile/security/api-tokens).
-
-### Prerequisites (install before running /ce-setup if missing)
+### Prerequisites (install once in a terminal before pasting the prompt)
 
 \`\`\`bash
 brew install gh
 npm install -g agent-browser && agent-browser install
 # Docker Desktop: https://docs.docker.com/get-docker/
+\`\`\`
+
+### Paste this into opencode
+
+\`\`\`
+Upgrade the compound-engineering-fe plugin to v${version} in this opencode install.
+
+1. Edit ~/.config/opencode/opencode.json and pin the plugin ref to v${version}:
+   {
+     "plugin": ["compound-engineering-fe@git+https://github.com/boltcoder/compound-engineering-fe-plugin.git#v${version}"]
+   }
+2. Restart opencode (close and reopen the session) so the new plugin ref is loaded.
+3. After restart, in any project, run /ce-setup. It will check for gh, agent-browser, and docker; then walk me through Jira setup — ask for my GitHub username, Atlassian email, and API token one by one, and write them to my shell profile. Have my API token ready (create one at https://id.atlassian.com/manage-profile/security/api-tokens).
+4. When /ce-setup finishes, confirm which tools and credentials are now in place and what (if anything) still needs to be installed manually.
 \`\`\`
 `
 }
