@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.21.2](https://github.com/boltcoder/compound-engineering-fe-plugin/compare/v3.21.1...v3.21.2) (2026-07-20)
+
+### Features
+
+* feat(release): auto-detect new skills and onboard after /ce-setup (#12) (2c71770)
+
+
 ## [3.21.1](https://github.com/boltcoder/compound-engineering-fe-plugin/compare/v3.21.0...v3.21.1) (2026-07-20)
 
 ### Bug Fixes
