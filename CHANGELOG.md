@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.21.1](https://github.com/boltcoder/compound-engineering-fe-plugin/compare/v3.21.0...v3.21.1) (2026-07-20)
+
+### Bug Fixes
+
+* fix(release): fold prerequisites into the upgrade prompt (#11) (9784e20)
+
+
 ## [3.21.0](https://github.com/boltcoder/compound-engineering-fe-plugin/compare/v3.20.2...v3.21.0) (2026-07-20)
 
 ### Features
