@@ -48,9 +48,14 @@ describe("findNewSkillsBetweenRefs", () => {
     expect(skills).not.toContain("ce-jira-update")
   })
 
-  test("returns empty list when nothing has changed in skills/", () => {
-    const skills = findNewSkillsBetweenRefs("v3.21.1")
-    expect(skills).toEqual([])
+  test("returns ce-fix-bugs for v3.21.2..HEAD because PR #14 modified its SKILL.md after that tag", () => {
+    // Note: findNewSkillsBetweenRefs tracks any change to skills/<name>/SKILL.md
+    // (additions AND modifications), so a modification to ce-fix-bugs/SKILL.md
+    // after v3.21.2 surfaces ce-fix-bugs here. This is the intended behavior —
+    // the release "What's new" section wants to call out materially-changed
+    // skills, not just newly-added ones.
+    const skills = findNewSkillsBetweenRefs("v3.21.2")
+    expect(skills).toEqual(["ce-fix-bugs"])
   })
 
   test("returns sorted output for stable test assertions", () => {

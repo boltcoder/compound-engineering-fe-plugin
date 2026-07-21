@@ -12,6 +12,7 @@ export type ParsedReleaseArgs = {
   bump: BumpLevel | null
   notes: string | null
   recentSkills: string[]
+  migrationNote: string | null
   dryRun: boolean
 }
 
@@ -19,6 +20,7 @@ export function parseArgs(argv: string[]): ParsedReleaseArgs {
   let bump: BumpLevel | null = null
   let notes: string | null = null
   let recentSkills: string[] = []
+  let migrationNote: string | null = null
   let dryRun = false
 
   // Accept both `--flag value` and `--flag=value` forms.
@@ -54,6 +56,11 @@ export function parseArgs(argv: string[]): ParsedReleaseArgs {
       if (inlineValue === null) i++
       continue
     }
+    if (arg === "--migration-note") {
+      migrationNote = inlineValue ?? argv[i + 1] ?? null
+      if (inlineValue === null) i++
+      continue
+    }
     if (arg === "--dry-run") {
       dryRun = true
       continue
@@ -68,11 +75,11 @@ export function parseArgs(argv: string[]): ParsedReleaseArgs {
     throw new Error("missing --bump")
   }
 
-  return { bump, notes, recentSkills, dryRun }
+  return { bump, notes, recentSkills, migrationNote, dryRun }
 }
 
 export function printUsage(): void {
   console.log(
-    "Usage: bun run scripts/release/release.ts --bump <patch|minor|major> [--notes \"...\"] [--recent-skills \"a,b\"] [--dry-run]",
+    "Usage: bun run scripts/release/release.ts --bump <patch|minor|major> [--notes \"...\"] [--recent-skills \"a,b\"] [--migration-note \"...\"] [--dry-run]",
   )
 }

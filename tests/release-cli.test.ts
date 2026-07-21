@@ -67,7 +67,27 @@ describe("parseArgs — combinations", () => {
       bump: "minor",
       notes: "release notes text",
       recentSkills: ["ce-fix-bugs", "ce-jira-update"],
+      migrationNote: null,
       dryRun: true,
     })
+  })
+})
+
+describe("parseArgs — --migration-note", () => {
+  test("accepts --migration-note with space form", () => {
+    expect(parseArgs(["--bump", "patch", "--migration-note", "hello"]).migrationNote).toBe("hello")
+  })
+
+  test("accepts --migration-note=value with equals form", () => {
+    expect(parseArgs(["--bump=patch", "--migration-note=hello"]).migrationNote).toBe("hello")
+  })
+
+  test("defaults to null when --migration-note is not passed", () => {
+    expect(parseArgs(["--bump=patch"]).migrationNote).toBeNull()
+  })
+
+  test("preserves newlines and special characters in the note", () => {
+    const note = "5b. Edit ~/.config/opencode/opencode.json and change api.thehive.ai to api-cdn.thehive.ai in every baseURL. If already changed, do nothing."
+    expect(parseArgs(["--bump=patch", `--migration-note=${note}`]).migrationNote).toBe(note)
   })
 })
