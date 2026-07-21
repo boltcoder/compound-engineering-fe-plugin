@@ -3,7 +3,7 @@
  * Repeatable release pipeline for compound-engineering-fe-plugin.
  *
  * Usage:
- *   bun run scripts/release/release.ts --bump <patch|minor|major> [--notes "..."] [--recent-skills "skill-a,skill-b"] [--dry-run]
+ *   bun run scripts/release/release.ts --bump <patch|minor|major> [--notes "..."] [--recent-skills "skill-a,skill-b"] [--migration-note "..."] [--dry-run]
  *
  * What it does (in order):
  *   1. Validates: on main, clean tree, up to date with origin.
@@ -18,6 +18,8 @@
  *   8. Creates a GitHub Release via `gh release create`. The release body includes
  *      a paste-ready upgrade prompt whose final step walks the user through every
  *      new skill listed in the "What's new" section after /ce-setup finishes.
+ *      --migration-note adds a one-time instruction block to the prompt for THIS
+ *      release only (e.g. the api.thehive.ai -> api-cdn.thehive.ai base-URL rewrite).
  *
  * --dry-run prints what would happen without writing or pushing.
  */
@@ -32,6 +34,7 @@ import {
   lookbackTagDisplay,
 } from "./skill-detection"
 import { parseArgs, printUsage, type BumpLevel } from "./cli"
+import { buildUpgradePrompt } from "./upgrade-prompt"
 
 // =====================================================
 //  Args (parsed via ./cli for testability)
@@ -150,38 +153,8 @@ function prependChangelog(entry: string): void {
   writeFileSync(CHANGELOG_FILE, newContent)
 }
 
-function generateConsumerUpgradeNotes(version: string, newSkills: string[]): string {
-  const onboardingStep =
-    newSkills.length > 0
-      ? `
-6. After /ce-setup finishes, walk me through each new skill shipped in this release. Use \`gh release view v${version} --json body --jq '.body'\` to read the release notes, find the "What's new in this release" section, and for every skill listed there tell me: (a) what it does in one line, (b) when to reach for it, (c) how to invoke it. Read \`docs/skills/<skill>.md\` for each so you can answer accurately, not from memory.
-7. When the walkthrough is done, confirm I have everything I need to start using the new skills in this project.`
-      : ""
-
-  return `
-
----
-
-## Use this prompt to upgrade
-
-Copy the prompt below and paste it into any opencode session. The agent will walk you through the whole upgrade — installing prerequisites, pinning the plugin ref, restarting opencode, and running \`/ce-setup\`.
-
-\`\`\`
-Upgrade the compound-engineering-fe plugin to v${version} in this opencode install.
-
-1. Make sure the required tools are installed. Run each of these in a terminal (skip any that are already installed) and report back the output of each:
-   - gh:    brew install gh
-   - agent-browser: npm install -g agent-browser && agent-browser install
-   - Docker Desktop: install from https://docs.docker.com/get-docker/ (the daemon must be running before /ce-setup runs)
-2. Edit ~/.config/opencode/opencode.json and pin the plugin ref to v${version}:
-   {
-     "plugin": ["compound-engineering-fe@git+https://github.com/boltcoder/compound-engineering-fe-plugin.git#v${version}"]
-   }
-3. Restart opencode (close and reopen the session) so the new plugin ref is loaded.
-4. After restart, in any project, run /ce-setup. It will re-check for gh, agent-browser, and docker; then walk me through Jira setup — ask for my GitHub username, Atlassian email, and API token one by one, and write them to my shell profile. Have my API token ready (create one at https://id.atlassian.com/manage-profile/security/api-tokens).
-5. When /ce-setup finishes, confirm which tools and credentials are now in place and what (if anything) still needs to be installed manually.${onboardingStep}
-\`\`\`
-`
+function generateConsumerUpgradeNotes(version: string, newSkills: string[], migrationNote: string): string {
+  return buildUpgradePrompt({ version, newSkills, migrationNote })
 }
 
 // =====================================================
@@ -259,6 +232,9 @@ console.log(dryRun ? "=== DRY RUN ===" : "=== RELEASE PIPELINE ===")
 console.log(`Bump: ${args.bump}`)
 if (args.recentSkills.length > 0) {
   console.log(`Recent skills override: ${args.recentSkills.join(", ")}`)
+}
+if (args.migrationNote) {
+  console.log(`Migration note: ${args.migrationNote.length} chars`)
 }
 
 // 1. Validate git state
@@ -357,7 +333,7 @@ if (whatsNew.skills.length > 0) {
 
 // 9. Create GitHub Release
 console.log(`\n9. Creating GitHub Release v${newVersion}...`)
-const consumerUpgrade = generateConsumerUpgradeNotes(newVersion, whatsNew.skills)
+const consumerUpgrade = generateConsumerUpgradeNotes(newVersion, whatsNew.skills, args.migrationNote)
 const releaseNotes = (args.notes ?? changelogEntry) + whatsNew.section + consumerUpgrade
 const tmpFile = path.join(require("node:os").tmpdir(), `ce-release-${newVersion}.md`)
 writeFileSync(tmpFile, releaseNotes)
