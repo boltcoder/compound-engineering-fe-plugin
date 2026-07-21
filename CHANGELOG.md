@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.21.3](https://github.com/boltcoder/compound-engineering-fe-plugin/compare/v3.21.2...v3.21.3) (2026-07-21)
+
+### Features
+
+* feat(release): cumulative upgrade summary + one-time migration-note flag (#15) (beb35ab)
+
+### Bug Fixes
+
+* fix(ce-fix-bugs): flip qa-ready items via MCP markdown rewrite, not UI automation (#14) (fd40bc9)
+* fix(release): accept --flag=value form and split parseArgs out (#13) (e795b8b)
+
+
 ## [3.21.2](https://github.com/boltcoder/compound-engineering-fe-plugin/compare/v3.21.1...v3.21.2) (2026-07-20)
 
 ### Features
