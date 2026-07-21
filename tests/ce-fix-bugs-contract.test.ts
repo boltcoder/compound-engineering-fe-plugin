@@ -109,15 +109,33 @@ describe("ce-fix-bugs contract", () => {
     expect(content).toContain("mcp-atlassian_jira_get_issue")
   })
 
-  test("marks items 'qa ready' via the Jira UI through agent-browser, not via the markdown field", async () => {
+  test("marks items 'qa ready' by rewriting the checklist markdown via the MCP server", async () => {
     const content = await readRepoFile("skills/ce-fix-bugs/SKILL.md")
 
-    // The status enum lives in the Forge app's storage; REST cannot flip it.
-    expect(content).toMatch(/Forge app.*storage|custom field exposed via REST|lives in the app's private storage/)
-    // The flip uses agent-browser.
-    expect(content).toContain("agent-browser")
-    // Pre-flight gate if agent-browser isn't installed.
-    expect(content).toMatch(/command -v agent-browser.*empty|agent-browser is not installed/)
+    // The per-item status IS the bracketed token in the markdown; rewriting it is what flips the status.
+    expect(content).toMatch(/per-item status.*is.*bracketed.*token|rewriting.*token.*is what moves.*status/i)
+    // The flip goes through the MCP server (no UI automation).
+    expect(content).toMatch(/no UI automation|not a UI action/i)
+    expect(content).toContain("mcp-atlassian_jira_update_issue")
+    // Skill must not depend on agent-browser for the qa-ready flip.
+    expect(content).not.toMatch(/agent-browser/)
+  })
+
+  test("gates the qa-ready flip on a current-HEAD PR re-approval via gh", async () => {
+    const content = await readRepoFile("skills/ce-fix-bugs/SKILL.md")
+
+    // Gate is mandatory and lives in Step 7a before the MCP write.
+    expect(content).toMatch(/Step 7a.*gate|gate.*Step 7a/i)
+    // Uses gh to inspect the PR for the current branch.
+    expect(content).toContain("gh pr view --json")
+    expect(content).toMatch(/number,state,headRefOid,reviews|number,state/)
+    // PR must be OPEN.
+    expect(content).toMatch(/PR.*state.*OPEN|state.*is.*OPEN/)
+    // PR head must equal local HEAD.
+    expect(content).toMatch(/headRefOid.*equals.*HEAD|headRefOid.*equal.*local HEAD/i)
+    // Approval must be on the current HEAD — a stale approval does not count.
+    expect(content).toMatch(/commit_id.*headRefOid|APPROVED.*commit_id/i)
+    expect(content).toMatch(/stale/i)
   })
 
   test("documents the SKIPPED annotation shape with an uppercase reason", async () => {
