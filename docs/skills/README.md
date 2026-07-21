@@ -126,7 +126,7 @@ Invoked when a specific need arises — not part of any chain.
 | Skill | Description |
 |-------|-------------|
 | [`/ce-jira-update`](./ce-jira-update.md) | After PR approval, append a layman description, overwrite the Test Behaviors field (`customfield_11643`), and transition the ticket to `Staging To QA` — manual invocation only, approval-gated |
-| [`/ce-fix-bugs`](./ce-fix-bugs.md) | Walk through every open item on a Jira ticket's checklist, fix each via `/ce-debug` or `/ce-work` with one commit per item on a single per-ticket branch, then flip each fixed item to `qa ready` via the Jira UI — manual invocation only |
+| [`/ce-fix-bugs`](./ce-fix-bugs.md) | Walk through every open item on a Jira ticket's checklist, fix each via `/ce-debug` or `/ce-work` with one commit per item on a single per-ticket branch, then flip each fixed item to `qa ready` by rewriting the checklist markdown via the MCP server — manual invocation only |
 
 ---
 
