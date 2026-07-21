@@ -121,6 +121,23 @@ describe("ce-fix-bugs contract", () => {
     expect(content).not.toMatch(/agent-browser/)
   })
 
+  test("gates the qa-ready flip on a current-HEAD PR re-approval via gh", async () => {
+    const content = await readRepoFile("skills/ce-fix-bugs/SKILL.md")
+
+    // Gate is mandatory and lives in Step 7a before the MCP write.
+    expect(content).toMatch(/Step 7a.*gate|gate.*Step 7a/i)
+    // Uses gh to inspect the PR for the current branch.
+    expect(content).toContain("gh pr view --json")
+    expect(content).toMatch(/number,state,headRefOid,reviews|number,state/)
+    // PR must be OPEN.
+    expect(content).toMatch(/PR.*state.*OPEN|state.*is.*OPEN/)
+    // PR head must equal local HEAD.
+    expect(content).toMatch(/headRefOid.*equals.*HEAD|headRefOid.*equal.*local HEAD/i)
+    // Approval must be on the current HEAD — a stale approval does not count.
+    expect(content).toMatch(/commit_id.*headRefOid|APPROVED.*commit_id/i)
+    expect(content).toMatch(/stale/i)
+  })
+
   test("documents the SKIPPED annotation shape with an uppercase reason", async () => {
     const content = await readRepoFile("skills/ce-fix-bugs/SKILL.md")
 

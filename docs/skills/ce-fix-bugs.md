@@ -52,8 +52,8 @@ When a ticket has a long checklist of open items, three things go wrong in pract
    - **Route** to `/ce-debug` (bug-shaped) or `/ce-work` (feature-shaped). Ask if ambiguous.
    - **Commit** with the canonical per-item subject: `<TICKET> - Checklist item #N - <fix>`.
    - **Annotate** the markdown in `customfield_11627` for any skipped items (`(SKIPPED: REASON)`); leave state tokens alone (the app's progress counters read only `[done]`).
-6. **Push and ask for review.** Print the running tally (`fixed: N / skipped: N / failed: N / branch / commits`); ask whether to open the PR, leave the branch local, or flip the fixed items to `qa ready` first (via the MCP server).
-7. **Flip fixed items to `qa ready` via the MCP server.** The per-item status **is** the bracketed state token in `customfield_11627` — rewriting the token from `[open]` (or `[reopen]`) to `[qa ready]` is what flips the status. A single `mcp-atlassian_jira_update_issue` call writes the full updated markdown for every fixed item at once; leave skipped and failed items byte-for-byte unchanged. Re-read the ticket to verify the markdown landed with the new tokens. The progress fields (`customfield_11613` / `11628` / `11629`) count only `[done]` items, so a `[qa ready]` flip will not move the progress percent — verify against the markdown text itself.
+6. **Push and ask for review.** Print the running tally (`fixed: N / skipped: N / failed: N / branch / commits`); ask whether to open the PR, leave the branch local, or proceed to Step 7 (verify PR re-approval via `gh`, then flip).
+7. **Verify PR re-approval via `gh`, then flip fixed items to `qa ready`.** Step 7a (gate): resolve local HEAD and branch, run `gh pr view --json number,state,headRefOid,reviews` for the branch, and confirm the PR is `OPEN`, the PR's `headRefOid` equals the local HEAD (push if behind; stop if diverged), and at least one review has `state == "APPROVED"` AND `commit_id == headRefOid`. An approval on an earlier HEAD is stale — the per-item commits changed the diff, so re-approval on the current HEAD is mandatory. Stop with guidance if any check fails. Step 7b (flip): the per-item status **is** the bracketed state token in `customfield_11627` — rewriting the token from `[open]` (or `[reopen]`) to `[qa ready]` is what flips the status. A single `mcp-atlassian_jira_update_issue` call writes the full updated markdown for every fixed item at once; leave skipped and failed items byte-for-byte unchanged. Re-read the ticket to verify the markdown landed with the new tokens. The progress fields (`customfield_11613` / `11628` / `11629`) count only `[done]` items, so a `[qa ready]` flip will not move the progress percent — verify against the markdown text itself.
 
 ---
 
@@ -84,9 +84,11 @@ A "no Maches left aligned" item is a polish request, not a bug; an "unable to ty
 
 Trivial items (one-line CSS, a typo, a label change) still route through one of the two — there is no third "trivial" path, because inventing one would defeat the per-item commit hygiene (every item deserves a delegated skill that owns its `git diff`).
 
-### 5. MCP-only writes (no curl fallback)
+### 5. MCP-only writes (no curl fallback), with a `gh`-based re-approval gate
 
 The skill reads through `mcp-atlassian_jira_get_issue` and writes the markdown through `mcp-atlassian_jira_update_issue` — including the `[qa ready]` flip in Step 7, which is a markdown rewrite, not a UI action. If the MCP server is unreachable, the skill stops with `/ce-setup` guidance; it never silently falls back to `curl`.
+
+Before the flip, Step 7a runs a mandatory `gh`-based gate: the PR must be `OPEN`, its `headRefOid` must equal the local HEAD, and at least one review must have `state == "APPROVED"` AND `commit_id == headRefOid`. An approval on an earlier HEAD is stale, because the per-item commits changed the diff after the prior approval — re-approval on the current HEAD is the must-pass condition for the flip to run.
 
 ### 6. The skill is pure instructions — no companion script
 
@@ -111,7 +113,7 @@ The skill resolves `HVD-9954`, fetches the ticket, parses three `open` items, se
 - **Item #2** — alignment, but the user types `skip 2 — already fixed in another ticket, see #HVD-9931`. The reason is uppercased to `ALREADY FIXED IN ANOTHER TICKET, SEE #HVD-9931` and appended inside parens at the end of item #2's text in the rewritten `customfield_11627`. No commit.
 - **Item #3** — bug-shaped (icon position + broken re-focus). Routed to `/ce-debug`. The delegated skill fixes the animation order and the focus restoration. Commit `HVD-9954 - Checklist item 3 - clear X icon stays at end after typing and re-focus is restored`.
 
-Loop summary: `fixed: 2, skipped: 1, failed: 0, branch: shrey/HVD-9954-checklist, commits: 2`. The user picks "open the PR"; `/ce-commit-push-pr` opens PR #4512. The user picks "flip the fixed items to qa ready"; the skill rewrites `customfield_11627` via `mcp-atlassian_jira_update_issue` with `[open]` → `[qa ready]` for items #1 and #3 (item #2's text keeps its `SKIPPED: ...` annotation; its state token stays `open`), then re-reads the ticket to verify the markdown landed with the new tokens.
+Loop summary: `fixed: 2, skipped: 1, failed: 0, branch: shrey/HVD-9954-checklist, commits: 2`. The user picks "open the PR"; `/ce-commit-push-pr` opens PR #4512. The user picks "proceed to Step 7"; the skill runs `gh pr view --json number,state,headRefOid,reviews` on `shrey/HVD-9954-checklist`, confirms PR #4512 is `OPEN` with an `APPROVED` review whose `commit_id` equals the local HEAD, then rewrites `customfield_11627` via `mcp-atlassian_jira_update_issue` with `[open]` → `[qa ready]` for items #1 and #3 (item #2's text keeps its `SKIPPED: ...` annotation; its state token stays `open`), and re-reads the ticket to verify the markdown landed with the new tokens.
 
 The user then runs `/ce-jira-update` on PR #4512 to flip the ticket's overall status and write the Test Behaviors block.
 
@@ -160,8 +162,8 @@ Skip `ce-fix-bugs` when:
 ```
 
 - **Upstream**: `/ce-debug` and `/ce-work` are the per-item delegated skills. They are dispatched from inside `ce-fix-bugs`'s loop, not from a chain.
-- **This skill**: reads the checklist, sets up the per-ticket branch, walks the loop, and rewrites the checklist markdown to flip fixed items to `qa ready`.
-- **Downstream**: `/ce-commit-push-pr` opens the PR; `/ce-jira-update` flips the ticket status and writes Test Behaviors after approval. There is no direct handoff — the user picks "open the PR" or "flip the fixed items to qa ready first" from the post-loop menu.
+- **This skill**: reads the checklist, sets up the per-ticket branch, walks the loop, verifies PR re-approval via `gh`, and rewrites the checklist markdown to flip fixed items to `qa ready`.
+- **Downstream**: `/ce-commit-push-pr` opens the PR; `/ce-jira-update` flips the ticket status and writes Test Behaviors after approval. There is no direct handoff — the user picks "open the PR" or "proceed to Step 7" from the post-loop menu.
 
 ---
 
@@ -179,7 +181,7 @@ This skill has **no per-user config** — the checklist field IDs, the Jira URL,
 
 The per-item state enum (`open`, `in progress`, `skipped`, `done`, `qa ready`, `reopen`) is also hardcoded — it comes from the **Issue Checklist for Jira** app by Gebsun, which is the only checklist app installed on this org's Jira.
 
-The one runtime requirement this skill enforces (and stops on) is the `mcp-atlassian` MCP server: if it is not reachable when the skill starts, it surfaces the `/ce-setup` install line and stops. The `qa ready` flip in Step 7 is not optional and goes through the same MCP server.
+The one runtime requirement this skill enforces (and stops on) is the `mcp-atlassian` MCP server: if it is not reachable when the skill starts, it surfaces the `/ce-setup` install line and stops. The `qa ready` flip in Step 7 is not optional and goes through the same MCP server, gated by a `gh`-based current-HEAD PR re-approval check (Step 7a). The `gh` CLI must be authenticated; if `gh pr view` errors on auth, the skill surfaces the `/ce-setup` GitHub-configuration line and stops.
 
 ---
 
