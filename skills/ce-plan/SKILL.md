@@ -294,15 +294,6 @@ Prepare a concise planning context summary (a paragraph or two) to pass as input
 - If `STRATEGY.md` exists, read it and include the relevant pieces (target problem, approach, active tracks) in the summary so downstream research and planning decisions are anchored to product strategy
 - If `CONCEPTS.md` exists at repo root, read it — its definitions are the canonical names for domain entities, named processes, and status concepts. Plan with those terms rather than synonyms.
 
-**Resolve the project profile from the shared cache first.** The agnostic profile (stack, deps, conventions, structure) is identical at this commit, so reuse it instead of having `repo-research-analyst` re-derive `technology`/`architecture`/`conventions` every run. Set `SKILL_DIR` to this skill's directory and run the helper (protocol in `references/repo-profile-cache.md`):
-
-```bash
-SKILL_DIR="<absolute path of the directory containing the SKILL.md you just read>";
-python3 "$SKILL_DIR/scripts/repo-profile-cache.py" get
-```
-
-On `HIT`, load the profile JSON as your agnostic grounding. On `MISS`, dispatch a generic subagent with `references/agents/repo-profiler.md` to derive it, write its JSON to a file, then `python3 "$SKILL_DIR/scripts/repo-profile-cache.py" put <file>` (re-set `SKILL_DIR` in that call — shell vars don't persist between Bash invocations). On `NO-CACHE` — or if the call errors or returns nothing — derive it inline and skip the `put`; never block on the cache. Pass the resulting profile to `repo-research-analyst` below so it skips the agnostic scopes. The cached profile covers only *root* conventions — if the work targets a subdirectory with its own scoped instruction file (a nested `AGENTS.md`/`CLAUDE.md`), read that fresh; subdirectory-scoped instructions are deliberately excluded from the cache.
-
 Run these agents in parallel:
 
 - `references/agents/repo-research-analyst.md` — scope: **patterns** (the question-specific slice; the agnostic `technology`/`architecture`/`conventions` grounding comes from the cached profile passed in its context — the profile's `stack`/`topology`/`conventions` keys cover those analyst scopes). Pass the planning context summary and the cached profile.
@@ -673,8 +664,6 @@ Fires **whenever Phase 0.2 resolved an upstream Product Contract source** — a 
 **Headless / opt-in skip:** in headless mode, or when `SKIP_SCOPING_CONFIRM` resolved to skip in Phase 0.0, do not block — compose the internal draft, skip the chat-time confirmation, and route Inferred bets to a `## Assumptions` section at plan-write (Phase 5.2). The skip covers only this scoping confirmation; Phase 0.4 routing, Phase 0.5 blockers, Phase 2 questions, source-doc disambiguation, and the Phase 5.4 menu still fire. Announcement wording and full routing: `references/synthesis-summary.md` ("Headless mode", "When to skip the blocking confirmation").
 
 #### 5.2 Write Plan File
-
-**Reasoning elevation (Claude Code only).** Before authoring the plan, if positively Claude Code (`CLAUDECODE=1`, not Cursor/Codex), load `references/reasoning-elevation.md` and follow it — it may dispatch the interpret-findings-then-author step to a higher-reasoning model when the user has opted in, and it owns the completion-time discoverability tip. On any non-Claude host, skip it entirely — proceed on the session model with no mention. If a prompt names a model this skill does not recognize on this harness, proceed on the session model without comment.
 
 **REQUIRED: Write the plan file to disk before presenting any options.**
 
