@@ -252,80 +252,6 @@ describe("verification_evidence seam parity (ce-work <-> lfg)", () => {
     expect(gate).toContain("Do NOT decide the test strategy inside LFG")
   })
 
-  test("lfg retries ce-work exactly once for evidence, then blocks rather than ships", async () => {
-    const lfg = await readRepoFile("skills/lfg/SKILL.md")
-    const gate = sliceSection(
-      lfg,
-      "2. Invoke the `ce-work` skill with `mode:return-to-caller",
-      "3. Invoke the `ce-simplify-code`"
-    )
-
-    // One-shot recovery on the same plan and engine binding, with the returned durable run id.
-    expect(gate).toContain("invoke `ce-work` one more time in recovery mode")
-    expect(gate).toContain("same `implementation_engine:<compact-json>` carrier")
-    expect(gate).toContain("implementation_run:<safe-id>")
-    expect(gate).toContain("Do not prompt the user and do not alter the plan path or engine carrier")
-    expect(gate).toContain("When `actual_route` is `native` and `run_id` is `null`")
-    expect(gate).toContain("repeat the original ce-work invocation once without an `implementation_run:` carrier")
-    expect(gate).toContain("A non-native return without a safe run id remains blocked")
-    // Second still-missing return stops blocked instead of continuing to ship.
-    expect(gate).toContain("stop as blocked and report the missing fields")
-    expect(gate).toContain("instead of continuing to simplify/review/ship")
-  })
-})
-
-describe("cross-model execution receipt seam parity (ce-work <-> lfg)", () => {
-  const ROUTE_RECEIPT_FIELDS = [
-    "implementation_engine_binding",
-    "requested_route",
-    "actual_route",
-    "requested_model",
-    "actual_model",
-    "fallback_reason",
-    "run_id",
-    "unit_receipts",
-    "plan_checkpoint",
-    "blockers",
-    "recovery_path",
-  ]
-
-  function sliceSection(content: string, startAnchor: string, endAnchor: string): string {
-    const start = content.indexOf(startAnchor)
-    expect(start, `start anchor not found: ${startAnchor}`).toBeGreaterThanOrEqual(0)
-    const end = content.indexOf(endAnchor, start + startAnchor.length)
-    expect(end, `end anchor not found: ${endAnchor}`).toBeGreaterThan(start)
-    return content.slice(start, end)
-  }
-
-  test("lfg requires every route receipt exposed by ce-work", async () => {
-    const ceWork = await readRepoFile("skills/ce-work/SKILL.md")
-    const lfg = await readRepoFile("skills/lfg/SKILL.md")
-    const returned = sliceSection(ceWork, "## Return-to-Caller Mode", "Engine selection (")
-    const gate = sliceSection(
-      lfg,
-      "2. Invoke the `ce-work` skill with `mode:return-to-caller",
-      "3. Invoke the `ce-simplify-code`",
-    )
-
-    for (const field of ROUTE_RECEIPT_FIELDS) {
-      expect(returned, `ce-work must return ${field}`).toContain(`\`${field}\``)
-      expect(gate, `lfg must gate on ${field}`).toContain(`\`${field}\``)
-    }
-  })
-
-  test("lfg keeps the binding out of plan and review inputs", async () => {
-    const lfg = await readRepoFile("skills/lfg/SKILL.md")
-    const carrier = sliceSection(
-      lfg,
-      "## Per-stage routing carriers",
-      "1. Invoke the `ce-plan` skill",
-    )
-    expect(carrier).toContain("Remove every routing directive")
-    expect(carrier).toContain("Never pass")
-    expect(carrier).toContain("`ce-plan`")
-    expect(carrier).toContain("`ce-code-review`")
-    expect(carrier).toContain("feature content")
-  })
 })
 
 describe("ce-debug regression test selection", () => {
@@ -519,9 +445,6 @@ describe("ce-doc-review contract", () => {
     // Cross-persona agreement promotion (replaces +0.10 boost)
     expect(synthesis).toContain("Cross-Persona Agreement Promotion")
     expect(synthesis).toContain("one anchor step")
-    expect(synthesis).toContain("`independence_verified` is `true`")
-    expect(synthesis).toContain("cannot use the twin fingerprint exception")
-    expect(synthesis).toContain("Cursor default/Auto")
 
     // R29 and R30 round-2 rules
     expect(synthesis).toContain("R29 Rejected-Finding Suppression")

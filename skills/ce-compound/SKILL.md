@@ -58,10 +58,8 @@ These files are the durable contract for the workflow. Read them on-demand at th
 - `references/schema.yaml` — canonical frontmatter fields and enum values (read when validating YAML)
 - `references/yaml-schema.md` — category mapping from problem_type to directory (read when classifying)
 - `references/concepts-vocabulary.md` — CONCEPTS.md format and inclusion rules (read in Phase 2.4 when domain terms surface)
-- `references/agents/session-historian.md` — skill-local synthesis prompt for optional session-history compounding context (read only when the user opts into session history)
 - `references/grounding-validation.md` — grounding-validation protocol: flag adjudication rules and the semantic validator prompt (read in Phase 2.45)
 - `assets/resolution-template.md` — section structure for new docs (read when assembling)
-- `scripts/session-history/` — session discovery and extraction scripts bundled into this skill so session-history support is fully self-contained
 - `scripts/validate-frontmatter.py` — frontmatter parser-safety validator (run in Phase 2 step 8 through the existence guard documented there; resolves only on Claude Code via `${CLAUDE_SKILL_DIR}`, with a manual-checklist fallback elsewhere)
 - `scripts/validate-doc-claims.py` — mechanical claims validator: cited paths, commit SHAs, relative links, dangling drafting scaffold (run in Phase 2.45 via the `SKILL_DIR` anchor)
 
@@ -228,8 +226,7 @@ Pass `{run_id}` and the resolved absolute `{run_dir}` into every Phase 1 subagen
 
 #### 4. **Session History** (internal flow after launching the parallel block — automatic in Full mode, including headless)
    - **Skip entirely** in lightweight mode. In Full mode (including headless) it always runs as a two-stage probe: the cheap discovery+metadata pass (below) always executes, and the expensive extraction+synthesis executes only when the probe clears the relevance gate (see **Escalation gate** below).
-   - Run session discovery, branch/keyword filtering, scan-window selection, deep-dive selection, and per-session extraction directly inside this skill using `scripts/session-history/`.
-   - Read the skill-local synthesis prompt at `references/agents/session-historian.md`, then dispatch a generic subagent using that prompt content. Do not dispatch a standalone agent by type/name.
+   - Session history is resolved using bundled session-history scripts; if the bundled scripts are genuinely not present on disk, skip session history visibly with: "Session history bundled scripts were not found in this skill's directory; skipping the session-history probe for this run." Continue Phase 2 without session context.
 
    **Session-history payload — keep tight.** A long, keyword-rich payload licenses widening. Use this shape:
 
@@ -248,40 +245,7 @@ Pass `{run_id}` and the resolved absolute `{run_dir}` into every Phase 1 subagen
      ```
 
    Do not append additional context blocks, exclusion lists, or topic-keyword bullets — verbose payloads give the session-history flow license to keep widening the search and rapidly compound wall time. If keyword search is needed, the internal flow owns that decision based on the topic.
-   - Returns: structured digest of findings from prior sessions, or "no relevant prior sessions" if none found.
    - **Session history is the final Phase 1 input, not a workflow stop.** When it returns, proceed directly to Phase 2 with its output as the last input — do not emit a summary and do not pause for the user. A "no relevant prior sessions" return is still a valid input; the documentation gets written without session context.
-
-   **Script resolution.** Set `SKILL_DIR` to the absolute path of the directory containing the SKILL.md you just read, and run the bundled scripts from `"$SKILL_DIR/scripts/session-history/"`. Set `SKILL_DIR` inline in each bash block below (shell state does not persist between commands). If the bundled scripts are genuinely not present on disk under `"$SKILL_DIR/scripts/session-history/"`, skip session history visibly with: "Session history bundled scripts were not found in this skill's directory; skipping the session-history probe for this run." Continue Phase 2 without session context.
-
-   **Discovery pipeline.** Infer the scan window from the problem topic, starting with 7 days. Run discovery and metadata extraction:
-
-   ```bash
-   SKILL_DIR="<absolute path of the directory containing the SKILL.md you just read>";
-   if [ -f "$SKILL_DIR/scripts/session-history/discover-sessions.sh" ] && [ -f "$SKILL_DIR/scripts/session-history/extract-metadata.py" ]; then REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd); REPO_NAME=$(basename "$REPO_ROOT"); SCAN_DAYS="7"; bash "$SKILL_DIR/scripts/session-history/discover-sessions.sh" "$REPO_NAME" "$SCAN_DAYS" --cwd "$REPO_ROOT" | tr '\n' '\0' | xargs -0 python3 "$SKILL_DIR/scripts/session-history/extract-metadata.py" --cwd-filter "$REPO_ROOT"; else echo "Session history bundled scripts were not found in this skill's directory; skipping the session-history probe for this run."; fi
-   ```
-
-   Pi sessions are included when present under `~/.pi/agent/sessions/`; they carry `cwd` like Codex but no git branch. If `_meta.files_processed` is `0`, return `no relevant prior sessions`. If the first pass finds no relevant branch matches, or if processing Codex or Pi sessions, derive 2-4 keywords from the topic and re-run metadata extraction with `--keyword K1,K2,...`. Keep at most 5 sessions across Claude Code, Codex, Cursor, and Pi, ranked by branch match, keyword match count, file size over 30KB, and recency. Exclude the current session.
-
-   **Escalation gate.** The discovery+metadata pass above is the cheap probe and always runs in Full mode. Escalate to the extraction and synthesis stages below **only** when at least one retained candidate clears the relevance bar: a current-branch match, or ≥2 topic-keyword matches. If no candidate clears the bar (including the `_meta.files_processed` is `0` case), stop here, record `no relevant prior sessions` as the session-history input, and skip extraction and synthesis. This gate is what keeps the always-on probe cheap — the expensive synthesis is paid for only when a prior session is genuinely relevant.
-
-   **Extraction pipeline.** Create `SCRATCH=$(mktemp -d -t ce-compound-sessions-XXXXXX)`. For each selected session, write extracted content to scratch files:
-
-   ```bash
-   SKILL_DIR="<absolute path of the directory containing the SKILL.md you just read>";
-   if [ -f "$SKILL_DIR/scripts/session-history/extract-skeleton.py" ]; then python3 "$SKILL_DIR/scripts/session-history/extract-skeleton.py" --output "$SCRATCH/<session-id>.skeleton.txt" < <session-file>; else echo "Session history bundled scripts were not found in this skill's directory; skipping the session-history probe for this run."; fi
-   ```
-
-   Use `extract-errors.py` selectively when dead ends or recurring errors are likely useful. Pass only the scratch file paths and metadata to the synthesis subagent.
-
-   **Synthesis dispatch.** Build a generic subagent prompt containing:
-   - the full content of `references/agents/session-historian.md`
-   - `problem_topic`
-   - `scratch_dir`
-   - a `sessions` array with extracted file paths and metadata
-   - the output schema above
-   - the filter rule above
-
-   The subagent reads only the scratch paths, **writes its prose findings to `{run_dir}/session-history.md`, and returns only that artifact path once the write is confirmed** (same #956 reliability rationale — session-history findings are long-form prose prone to summary-collapse). If `{run_id}` did not resolve or the artifact write failed, it returns the prose inline instead (per the inline-fallback rule above). If synthesis fails, note the failure and continue without session context.
 
 ### Phase 2: Assembly & Write
 
@@ -475,9 +439,6 @@ After the learning is written and the refresh decision is made, check whether th
 
 Based on problem type, optionally dispatch generic subagents seeded with local prompt assets from `references/agents/` to review the documentation. Do not dispatch standalone agents by type/name.
 
-- **performance_issue** → `references/agents/performance-oracle.md`
-- **security_issue** → `references/agents/security-sentinel.md`
-- **database_issue** → `references/agents/data-integrity-guardian.md`
 - Any code-heavy issue → preserve code simplification as a **read-only documentation review**. Inspect the solution draft's code examples and explanatory claims inline, or dispatch a generic subagent seeded with a local prompt only to return suggestions. Do **not** invoke `ce-simplify-code` from this phase and do not mutate product code unless the user explicitly asks for a separate code-simplification pass. Do not use the deleted `code-simplicity-reviewer`.
   Example: review the solution draft's examples for speculative abstractions, redundant wrappers, dead branches, and just-in-case parameters. Apply edits only to the documentation/examples being written by `ce-compound`; leave any branch code changes untouched.
 
@@ -739,11 +700,6 @@ Based on problem type, these local prompt assets can enhance documentation:
 ### Code Quality & Review
 - **Read-only code simplification review**: Checks solution examples and documentation claims for unnecessary complexity without mutating product code
 - **references/agents/pattern-recognition-specialist.md**: Identifies anti-patterns or repeating issues
-
-### Specific Domain Experts
-- **references/agents/performance-oracle.md**: Analyzes performance_issue category solutions
-- **references/agents/security-sentinel.md**: Reviews security_issue solutions for vulnerabilities
-- **references/agents/data-integrity-guardian.md**: Reviews database_issue migrations and queries
 
 ### Enhancement & Research
 - **references/agents/best-practices-researcher.md**: Enriches solution with industry best practices

@@ -20,7 +20,7 @@ The internal draft is structured in three labeled buckets. Items may appear in t
 - **Inferred** — what the agent assumed to fill gaps. Scope boundaries the user never explicitly named, success criteria extrapolated from intent, technical assumptions made because the brief interview didn't probe them. The Inferred bucket is the most actionable surface for correction — items here are the agent's bets.
 - **Out of scope** — deliberately excluded items. Adjacent work the agent considered but decided not to include, refactors, nice-to-haves, future-work items. Making exclusions explicit lets the agent spot anything that should actually be included.
 
-A session-settled decision (per `references/settled-decisions.md`) is **Stated with provenance** — record it in the Stated bucket with its class, rejected alternative, and one-line reason, never in Inferred: it is the user's confirmed choice, not an agent bet.
+A session-settled decision is **Stated with provenance** — record it in the Stated bucket with its class, rejected alternative, and one-line reason, never in Inferred: it is the user's confirmed choice, not an agent bet.
 
 This draft is internal. Do not paste it verbatim into chat. Compose it as a thinking step, then derive stage 2 from it.
 
